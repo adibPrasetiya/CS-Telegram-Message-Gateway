@@ -132,12 +132,16 @@ export class BroadcastController {
           const url = new URL(fileUrl);
           const relativePath = url.pathname.substring(1); // Remove leading slash
           
+          // Decode URL encoding (e.g., %20 -> space)
+          const decodedPath = decodeURIComponent(relativePath);
+          
           // Normalize path separators for Windows
-          const normalizedPath = relativePath.replace(/\//g, path.sep);
+          const normalizedPath = decodedPath.replace(/\//g, path.sep);
           const fullPath = path.resolve(__dirname, '../..', normalizedPath);
           
           console.log(`Original URL: ${fileUrl}`);
-          console.log(`Relative path: ${relativePath}`);
+          console.log(`Relative path (encoded): ${relativePath}`);
+          console.log(`Decoded path: ${decodedPath}`);
           console.log(`Normalized path: ${normalizedPath}`);
           console.log(`Full resolved path: ${fullPath}`);
           console.log(`__dirname: ${__dirname}`);
@@ -148,11 +152,13 @@ export class BroadcastController {
             console.log(`File size: ${stats.size} bytes`);
             console.log(`File permissions: ${stats.mode.toString(8)}`);
           } else {
-            // Try alternative path constructions
+            // Try alternative path constructions with decoded path
             const altPath1 = path.join(process.cwd(), 'backend', normalizedPath);
             const altPath2 = path.join(process.cwd(), normalizedPath);
+            const altPath3 = path.join(process.cwd(), decodedPath);
             console.log(`Alternative path 1: ${altPath1} (exists: ${fs.existsSync(altPath1)})`);
             console.log(`Alternative path 2: ${altPath2} (exists: ${fs.existsSync(altPath2)})`);
+            console.log(`Alternative path 3 (direct): ${altPath3} (exists: ${fs.existsSync(altPath3)})`);
           }
           
           return fullPath;
