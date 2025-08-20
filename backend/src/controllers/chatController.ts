@@ -22,10 +22,29 @@ export const getSessions = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
+    // Parse pagination parameters
+    const limit = Math.min(parseInt(req.query.limit as string) || 15, 50); // Default 15, max 50
+    const offset = parseInt(req.query.offset as string) || 0;
+    const page = parseInt(req.query.page as string);
+
+    // If page is provided, calculate offset from page
+    const actualOffset = page ? (page - 1) * limit : offset;
+
     const csId = req.user.role === 'CS' ? req.user.id : undefined;
-    const sessions = await chatService.getSessions(csId);
+    const result = await chatService.getSessions(csId, limit, actualOffset);
     
-    res.json({ sessions });
+    res.json({
+      success: true,
+      data: result.sessions,
+      pagination: {
+        currentPage: result.currentPage,
+        totalPages: result.totalPages,
+        total: result.total,
+        hasMore: result.hasMore,
+        limit,
+        offset: actualOffset
+      }
+    });
   } catch (error) {
     console.error('Error getting sessions:', error);
     res.status(500).json({ error: 'Internal server error' });

@@ -10,10 +10,26 @@ export class ChatService {
     this.telegramService = telegramService;
   }
 
-  async getSessions(csId?: string): Promise<SessionInfo[]> {
+  async getSessions(csId?: string, limit = 15, offset = 0): Promise<{
+    sessions: SessionInfo[],
+    hasMore: boolean,
+    total: number,
+    currentPage: number,
+    totalPages: number
+  }> {
     const whereClause = csId 
       ? { csId, status: 'ACTIVE' as const }
       : { status: 'ACTIVE' as const };
+
+    // Get total count for pagination info
+    const total = await prisma.session.count({
+      where: whereClause
+    });
+
+    // Calculate pagination info
+    const totalPages = Math.ceil(total / limit);
+    const currentPage = Math.floor(offset / limit) + 1;
+    const hasMore = offset + limit < total;
 
     const sessions = await prisma.session.findMany({
       where: whereClause,
@@ -25,7 +41,9 @@ export class ChatService {
           take: 1
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset
     });
 
     const sessionInfos: SessionInfo[] = [];
@@ -69,7 +87,19 @@ export class ChatService {
       });
     }
 
-    return sessionInfos;
+    return {
+      sessions: sessionInfos,
+      hasMore,
+      total,
+      currentPage,
+      totalPages
+    };
+  }
+
+  // Keep the old method for backward compatibility (deprecated)
+  async getAllSessions(csId?: string): Promise<SessionInfo[]> {
+    const result = await this.getSessions(csId, 1000, 0); // Get a large number for backward compatibility
+    return result.sessions;
   }
 
   async getSessionMessages(sessionId: string, limit = 50, offset = 0, lastMessageId?: string): Promise<{

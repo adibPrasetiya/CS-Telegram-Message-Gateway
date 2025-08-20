@@ -97,12 +97,24 @@ import {
           </app-search-input>
           
           <!-- Chat List Items -->
-          <div slot="list-items">
+          <div slot="list-items" class="sessions-scroll-container" #sessionsContainer>
             <app-list-item
               *ngFor="let session of filteredSessions; trackBy: trackBySessionId"
               [data]="getListItemData(session)"
               (itemClick)="selectSession(session)">
             </app-list-item>
+            
+            <!-- Loading indicator for infinite scroll -->
+            <div *ngIf="chatService.isLoadingSessions() && sessions.length > 0" class="loading-more-indicator">
+              <i class="fas fa-spinner fa-spin"></i>
+              <span>Loading more sessions...</span>
+            </div>
+            
+            <!-- End of list indicator -->
+            <div *ngIf="!chatService.hasMoreSessions() && sessions.length > 0" class="end-of-list-indicator">
+              <i class="fas fa-check-circle"></i>
+              <span>All sessions loaded</span>
+            </div>
           </div>
         </app-list-panel>
 
@@ -944,11 +956,97 @@ import {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
+
+    /* Sessions Scroll Container Styles */
+    .sessions-scroll-container {
+      overflow-y: auto;
+      max-height: calc(100vh - 200px);
+      padding-right: 4px;
+      
+      /* Smooth scrolling behavior */
+      scroll-behavior: smooth;
+      
+      /* Custom scrollbar styling */
+      scrollbar-width: thin;
+      scrollbar-color: #5288c1 #17212b;
+    }
+
+    /* Webkit scrollbar styling for sessions container */
+    .sessions-scroll-container::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .sessions-scroll-container::-webkit-scrollbar-track {
+      background: #17212b;
+      border-radius: 4px;
+    }
+
+    .sessions-scroll-container::-webkit-scrollbar-thumb {
+      background: #5288c1;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+    }
+
+    .sessions-scroll-container::-webkit-scrollbar-thumb:hover {
+      background: #4a7bb0;
+    }
+
+    .sessions-scroll-container::-webkit-scrollbar-thumb:active {
+      background: #3e6a96;
+    }
+
+    /* Loading and status indicators for sessions */
+    .loading-more-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 16px;
+      color: #8696a8;
+      font-size: 14px;
+      background: #1a2332;
+      border-radius: 8px;
+      margin: 8px 0;
+    }
+
+    .loading-more-indicator i {
+      color: #5288c1;
+      font-size: 16px;
+    }
+
+    .end-of-list-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 12px;
+      color: #6c7b8a;
+      font-size: 13px;
+      font-style: italic;
+      border-top: 1px solid #1a252f;
+      margin-top: 8px;
+    }
+
+    .end-of-list-indicator i {
+      color: #4caf50;
+      font-size: 14px;
+    }
+
+    /* Spinner for loading states */
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(82, 136, 193, 0.3);
+      border-top: 2px solid #5288c1;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
   `]
 })
 export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('fileInput') fileInput!: ElementRef<HTMLInputElement>;
   @ViewChild('messagesContainer') messagesContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('sessionsContainer') sessionsContainer!: ElementRef<HTMLDivElement>;
   
   private destroy$ = new Subject<void>();
   
@@ -1006,7 +1104,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
 
   constructor(
     private authService: AuthService,
-    private chatService: ChatService,
+    public chatService: ChatService,
     private socketService: SocketService,
     private router: Router
   ) {}
@@ -1044,21 +1142,30 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
     this.destroy$.complete();
     this.socketService.disconnect();
     
-    // Clean up scroll listener
+    // Clean up scroll listeners
     if (this.messagesContainer?.nativeElement && this.scrollHandler) {
       const element = this.messagesContainer.nativeElement;
       element.removeEventListener('scroll', this.scrollHandler);
+    }
+    
+    if (this.sessionsContainer?.nativeElement && this.sessionsScrollHandler) {
+      const element = this.sessionsContainer.nativeElement;
+      element.removeEventListener('scroll', this.sessionsScrollHandler);
     }
   }
 
   private loadSessions(): void {
     this.isLoadingChats = true;
-    this.chatService.getSessions().subscribe({
+    
+    // Reset sessions and load initial page
+    this.chatService.resetSessions();
+    
+    this.chatService.loadInitialSessions(15).subscribe({
       next: (response) => {
-        console.log('Sessions loaded:', response.sessions.length);
-        this.sessions = response.sessions;
+        console.log('Initial sessions loaded:', response.data.length, 'of', response.pagination.total);
+        this.sessions = response.data;
         this.filteredSessions = this.sessions;
-        this.chatService.updateSessions(this.sessions);
+        this.chatService.updateSessionsFromResponse(response, false); // false = not appending
         this.isLoadingChats = false;
         this.filterChats();
         
@@ -1076,6 +1183,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
       error: (error) => {
         console.error('Error loading sessions:', error);
         this.isLoadingChats = false;
+        this.chatService.setLoadingSessions(false);
         
         // Don't clear sessions on error to prevent UI from disappearing
         // Show an error message instead
@@ -1083,6 +1191,31 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
           console.log('Authentication error, redirecting to login');
           this.logout();
         }
+      }
+    });
+  }
+
+  private loadMoreSessions(): void {
+    if (this.chatService.isLoadingSessions() || !this.chatService.hasMoreSessions()) {
+      return;
+    }
+
+    console.log('Loading more sessions...');
+    
+    this.chatService.loadMoreSessions().subscribe({
+      next: (response) => {
+        if (response) {
+          console.log('More sessions loaded:', response.data.length, 'more sessions');
+          // Update the local sessions array
+          this.sessions = [...this.sessions, ...response.data];
+          this.filteredSessions = this.sessions;
+          this.chatService.updateSessionsFromResponse(response, true); // true = appending
+          this.filterChats();
+        }
+      },
+      error: (error) => {
+        console.error('Error loading more sessions:', error);
+        this.chatService.setLoadingSessions(false);
       }
     });
   }
@@ -1642,10 +1775,77 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
     // Will be set up after view init
   }
 
+  private setupSessionsScrollListener(): void {
+    if (!this.sessionsContainer?.nativeElement) {
+      console.warn('Sessions container not available for scroll listener setup');
+      return;
+    }
+    
+    const element = this.sessionsContainer.nativeElement;
+    let scrollTimeout: number;
+    
+    // Remove existing listener if any
+    element.removeEventListener('scroll', this.sessionsScrollHandler);
+    
+    console.log('Setting up sessions scroll listener with initial state:', {
+      hasMoreSessions: this.chatService.hasMoreSessions(),
+      sessionsCount: this.sessions.length,
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+      canScroll: element.scrollHeight > element.clientHeight
+    });
+    
+    // Create the scroll handler for sessions
+    this.sessionsScrollHandler = () => {
+      // Debounce scroll events for performance
+      clearTimeout(scrollTimeout);
+      scrollTimeout = window.setTimeout(() => {
+        const scrollTop = element.scrollTop;
+        const scrollHeight = element.scrollHeight;
+        const clientHeight = element.clientHeight;
+        const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100; // 100px threshold from bottom
+        
+        // Debug scroll position
+        console.log('Sessions scroll event:', {
+          scrollTop,
+          scrollHeight,
+          clientHeight,
+          isNearBottom,
+          hasMoreSessions: this.chatService.hasMoreSessions(),
+          isLoading: this.chatService.isLoadingSessions(),
+          sessionsCount: this.sessions.length,
+          canScroll: scrollHeight > clientHeight
+        });
+        
+        // Check if user scrolled to bottom and all conditions are met
+        if (isNearBottom && 
+            this.chatService.hasMoreSessions() && 
+            !this.chatService.isLoadingSessions() &&
+            scrollHeight > clientHeight) { // Ensure container is actually scrollable
+          console.log('Triggering loadMoreSessions...');
+          this.loadMoreSessions();
+        }
+      }, 150); // Debounce time for better responsiveness
+    };
+    
+    element.addEventListener('scroll', this.sessionsScrollHandler);
+    
+    // Also trigger an initial check in case the container is not scrollable yet
+    setTimeout(() => {
+      if (element.scrollHeight <= element.clientHeight && 
+          this.chatService.hasMoreSessions() && 
+          !this.chatService.isLoadingSessions()) {
+        console.log('Sessions container not scrollable, loading more sessions automatically');
+        this.loadMoreSessions();
+      }
+    }, 200);
+  }
+
   ngAfterViewInit(): void {
     // Add a small delay to ensure the view is fully initialized
     setTimeout(() => {
       this.setupMessagesScrollListener();
+      this.setupSessionsScrollListener();
     }, 100);
   }
 
@@ -1716,6 +1916,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private scrollHandler = () => {}; // Will be overridden in setupMessagesScrollListener
+  private sessionsScrollHandler = () => {}; // Will be overridden in setupSessionsScrollListener
 
   private loadMoreMessages(): void {
     if (!this.activeSession || this.isLoadingMessages || !this.hasMoreMessages) {
