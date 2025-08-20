@@ -1,0 +1,52 @@
+@import 'bootstrap/dist/css/bootstrap.min.css';
+
+:root {
+  --primary-color: #007BFF;
+  --success-color: #28A745;
+  --sidebar-bg: #f8f9fa;
+  --chat-bg: #ffffff;
+  --message-client-bg: #e3f2fd;
+  --message-cs-bg: #f3e5f5;
+  --border-color: #dee2e6;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f5f5f5;
+  overflow: hidden;
+}
+
+.text-muted {
+  color: #6c757d !important;
+}
+
+.bg-primary {
+  background-color: var(--primary-color) !important;
+}
+
+.bg-success {
+  background-color: var(--success-color) !important;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-hidden::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.scrollbar-hidden::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.scrollbar-hidden::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

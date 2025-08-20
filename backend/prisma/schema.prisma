@@ -1,0 +1,171 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(CS)
+  statusOnline Boolean  @default(false) @map("status_online")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  sessions      Session[]
+  refreshTokens RefreshToken[]
+  broadcasts    Broadcast[]
+
+  @@map("users")
+}
+
+model Client {
+  id         String   @id @default(cuid())
+  telegramId String   @unique @map("telegram_id")
+  name       String
+  username   String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  sessions           Session[]
+  pendingMessages    PendingMessage[]
+  broadcastRecipients BroadcastRecipient[]
+
+  @@map("clients")
+}
+
+model Session {
+  id        String        @id @default(cuid())
+  clientId  String        @map("client_id")
+  csId      String?       @map("cs_id")
+  status    SessionStatus @default(ACTIVE)
+  createdAt DateTime      @default(now()) @map("created_at")
+  endedAt   DateTime?     @map("ended_at")
+
+  client Client @relation(fields: [clientId], references: [id])
+  cs     User?  @relation(fields: [csId], references: [id])
+  chats  Chat[]
+
+  @@map("sessions")
+}
+
+model Chat {
+  id          String      @id @default(cuid())
+  sessionId   String      @map("session_id")
+  senderType  SenderType  @map("sender_type")
+  messageType MessageType @default(TEXT) @map("message_type")
+  message     String      @db.Text
+  fileUrl     String?     @map("file_url")
+  isRead      Boolean     @default(false) @map("is_read")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  session Session @relation(fields: [sessionId], references: [id])
+
+  @@map("chats")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  token     String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([token(length: 255)])
+  @@map("refresh_tokens")
+}
+
+model PendingMessage {
+  id                String      @id @default(cuid())
+  clientId          String      @map("client_id")
+  messageType       MessageType @default(TEXT) @map("message_type")
+  message           String      @db.Text
+  fileUrl           String?     @map("file_url")
+  telegramMessageId String      @map("telegram_message_id")
+  originalMessage   String      @db.LongText @map("original_message")
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@map("pending_messages")
+}
+
+enum UserRole {
+  ADMIN
+  CS
+}
+
+enum SessionStatus {
+  ACTIVE
+  ENDED
+}
+
+enum SenderType {
+  CLIENT
+  CS
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  VIDEO
+  LINK
+}
+
+model Broadcast {
+  id             String           @id @default(cuid())
+  message        String           @db.Text
+  messageType    MessageType      @default(TEXT) @map("message_type")
+  fileUrl        String?          @map("file_url")
+  sentBy         String           @map("sent_by")
+  status         BroadcastStatus  @default(PENDING)
+  recipientCount Int              @default(0) @map("recipient_count")
+  sentCount      Int              @default(0) @map("sent_count")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  sender     User                  @relation(fields: [sentBy], references: [id])
+  recipients BroadcastRecipient[]
+
+  @@map("broadcasts")
+}
+
+model BroadcastRecipient {
+  id          String                   @id @default(cuid())
+  broadcastId String                   @map("broadcast_id")
+  clientId    String                   @map("client_id")
+  status      BroadcastRecipientStatus @default(PENDING)
+  sentAt      DateTime?                @map("sent_at")
+  createdAt   DateTime                 @default(now()) @map("created_at")
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id])
+  client    Client    @relation(fields: [clientId], references: [id])
+
+  @@unique([broadcastId, clientId])
+  @@map("broadcast_recipients")
+}
+
+enum BroadcastStatus {
+  PENDING
+  SENDING
+  COMPLETED
+  FAILED
+}
+
+enum BroadcastRecipientStatus {
+  PENDING
+  SENT
+  FAILED
+}
