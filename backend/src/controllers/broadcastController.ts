@@ -118,6 +118,11 @@ export class BroadcastController {
       const delayBetweenMessages = 1000; // 1 second delay to respect Telegram rate limits
       const retryAttempts = 3;
 
+      // Bind methods to avoid 'this' context issues in nested loops
+      const getLocalFilePath = this.getLocalFilePath.bind(this);
+      
+      console.log(`Broadcast details - Message: "${message}", Type: ${messageType}, File: ${fileUrl ? 'YES' : 'NO'}`);
+
       // Process clients in batches
       for (let i = 0; i < registeredClients.length; i += batchSize) {
         const batch = registeredClients.slice(i, i + batchSize);
@@ -153,36 +158,45 @@ export class BroadcastController {
               }
 
               // Send the message based on type
+              console.log(`Message type: ${messageType}, Has fileUrl: ${!!fileUrl}, Has message: ${!!message}`);
+              
               if (messageType === 'IMAGE' && fileUrl) {
                 // For images, send file stream instead of URL
-                const filePath = this.getLocalFilePath(fileUrl);
+                const filePath = getLocalFilePath(fileUrl);
+                console.log(`Sending image: ${filePath}`);
                 if (fs.existsSync(filePath)) {
                   await telegramService.sendPhoto(chatId, filePath, message || undefined);
                 } else {
-                  throw new Error(`File not found: ${filePath}`);
+                  throw new Error(`Image file not found: ${filePath}`);
                 }
               } else if (messageType === 'VIDEO' && fileUrl) {
                 // For videos, send file stream instead of URL
-                const filePath = this.getLocalFilePath(fileUrl);
+                const filePath = getLocalFilePath(fileUrl);
+                console.log(`Sending video: ${filePath}`);
                 if (fs.existsSync(filePath)) {
                   await telegramService.sendVideo(chatId, filePath, message || undefined);
                 } else {
-                  throw new Error(`File not found: ${filePath}`);
+                  throw new Error(`Video file not found: ${filePath}`);
                 }
               } else if (messageType === 'FILE' && fileUrl) {
                 // For files, send file stream instead of URL
-                const filePath = this.getLocalFilePath(fileUrl);
+                const filePath = getLocalFilePath(fileUrl);
+                console.log(`Sending document: ${filePath}`);
                 if (fs.existsSync(filePath)) {
                   await telegramService.sendDocument(chatId, filePath, message || undefined);
                 } else {
-                  throw new Error(`File not found: ${filePath}`);
+                  throw new Error(`Document file not found: ${filePath}`);
                 }
+              } else if ((messageType === 'IMAGE' || messageType === 'VIDEO' || messageType === 'FILE') && !fileUrl) {
+                // File type message but no file URL - this should not happen
+                throw new Error(`${messageType} message type requires a file, but no file URL provided`);
               } else {
                 // For TEXT and LINK messages, or when no file is provided
                 if (!message && !fileUrl) {
                   throw new Error('No message content or file provided');
                 }
                 const finalMessage = message || `File: ${fileUrl}`;
+                console.log(`Sending text message: ${finalMessage.substring(0, 50)}...`);
                 await telegramService.sendMessage(chatId, finalMessage);
               }
 
@@ -465,11 +479,27 @@ export class BroadcastController {
   }
 
   private getLocalFilePath(fileUrl: string): string {
-    // Convert URL to local file path
-    // Example: http://localhost:3000/uploads/filename.jpg -> uploads/filename.jpg
-    const url = new URL(fileUrl);
-    const relativePath = url.pathname.substring(1); // Remove leading slash
-    return path.join(__dirname, '../..', relativePath);
+    return BroadcastController.convertFileUrlToPath(fileUrl);
+  }
+
+  // Static method as backup solution for file path conversion
+  private static convertFileUrlToPath(fileUrl: string): string {
+    try {
+      if (!fileUrl) {
+        throw new Error('File URL is required');
+      }
+      
+      // Convert URL to local file path
+      // Example: http://localhost:3000/uploads/filename.jpg -> uploads/filename.jpg
+      const url = new URL(fileUrl);
+      const relativePath = url.pathname.substring(1); // Remove leading slash
+      const fullPath = path.join(__dirname, '../..', relativePath);
+      console.log(`Converting URL ${fileUrl} to local path: ${fullPath}`);
+      return fullPath;
+    } catch (error) {
+      console.error(`Error converting file URL to local path: ${fileUrl}`, error);
+      throw new Error(`Invalid file URL: ${fileUrl}`);
+    }
   }
 }
 
