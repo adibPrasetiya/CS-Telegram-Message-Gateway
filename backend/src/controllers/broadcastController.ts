@@ -125,12 +125,36 @@ export class BroadcastController {
             throw new Error('File URL is required');
           }
           
+          console.log(`Converting file URL: ${fileUrl}`);
+          
           // Convert URL to local file path
           // Example: http://localhost:3000/uploads/filename.jpg -> uploads/filename.jpg
           const url = new URL(fileUrl);
           const relativePath = url.pathname.substring(1); // Remove leading slash
-          const fullPath = path.join(__dirname, '../..', relativePath);
-          console.log(`Converting URL ${fileUrl} to local path: ${fullPath}`);
+          
+          // Normalize path separators for Windows
+          const normalizedPath = relativePath.replace(/\//g, path.sep);
+          const fullPath = path.resolve(__dirname, '../..', normalizedPath);
+          
+          console.log(`Original URL: ${fileUrl}`);
+          console.log(`Relative path: ${relativePath}`);
+          console.log(`Normalized path: ${normalizedPath}`);
+          console.log(`Full resolved path: ${fullPath}`);
+          console.log(`__dirname: ${__dirname}`);
+          console.log(`Path exists: ${fs.existsSync(fullPath)}`);
+          
+          if (fs.existsSync(fullPath)) {
+            const stats = fs.statSync(fullPath);
+            console.log(`File size: ${stats.size} bytes`);
+            console.log(`File permissions: ${stats.mode.toString(8)}`);
+          } else {
+            // Try alternative path constructions
+            const altPath1 = path.join(process.cwd(), 'backend', normalizedPath);
+            const altPath2 = path.join(process.cwd(), normalizedPath);
+            console.log(`Alternative path 1: ${altPath1} (exists: ${fs.existsSync(altPath1)})`);
+            console.log(`Alternative path 2: ${altPath2} (exists: ${fs.existsSync(altPath2)})`);
+          }
+          
           return fullPath;
         } catch (error) {
           console.error(`Error converting file URL to local path: ${fileUrl}`, error);
@@ -178,29 +202,56 @@ export class BroadcastController {
               console.log(`Message type: ${messageType}, Has fileUrl: ${!!fileUrl}, Has message: ${!!message}`);
               
               if (messageType === 'IMAGE' && fileUrl) {
-                // For images, send file stream instead of URL
+                // For images, try multiple methods
                 const filePath = getLocalFilePath(fileUrl);
                 console.log(`Sending image: ${filePath}`);
                 if (fs.existsSync(filePath)) {
-                  await telegramService.sendPhoto(chatId, filePath, message || undefined);
+                  try {
+                    // First try with file path directly
+                    console.log(`Attempting to send image with file path...`);
+                    await telegramService.sendPhoto(chatId, filePath, message || undefined);
+                  } catch (pathError) {
+                    console.log(`File path method failed, trying with stream...`, pathError);
+                    // Fallback to stream
+                    const fileStream = fs.createReadStream(filePath);
+                    await telegramService.sendPhoto(chatId, fileStream, message || undefined);
+                  }
                 } else {
                   throw new Error(`Image file not found: ${filePath}`);
                 }
               } else if (messageType === 'VIDEO' && fileUrl) {
-                // For videos, send file stream instead of URL
+                // For videos, try multiple methods
                 const filePath = getLocalFilePath(fileUrl);
                 console.log(`Sending video: ${filePath}`);
                 if (fs.existsSync(filePath)) {
-                  await telegramService.sendVideo(chatId, filePath, message || undefined);
+                  try {
+                    // First try with file path directly
+                    console.log(`Attempting to send video with file path...`);
+                    await telegramService.sendVideo(chatId, filePath, message || undefined);
+                  } catch (pathError) {
+                    console.log(`File path method failed, trying with stream...`, pathError);
+                    // Fallback to stream
+                    const fileStream = fs.createReadStream(filePath);
+                    await telegramService.sendVideo(chatId, fileStream, message || undefined);
+                  }
                 } else {
                   throw new Error(`Video file not found: ${filePath}`);
                 }
               } else if (messageType === 'FILE' && fileUrl) {
-                // For files, send file stream instead of URL
+                // For files, try multiple methods
                 const filePath = getLocalFilePath(fileUrl);
                 console.log(`Sending document: ${filePath}`);
                 if (fs.existsSync(filePath)) {
-                  await telegramService.sendDocument(chatId, filePath, message || undefined);
+                  try {
+                    // First try with file path directly
+                    console.log(`Attempting to send document with file path...`);
+                    await telegramService.sendDocument(chatId, filePath, message || undefined);
+                  } catch (pathError) {
+                    console.log(`File path method failed, trying with stream...`, pathError);
+                    // Fallback to stream
+                    const fileStream = fs.createReadStream(filePath);
+                    await telegramService.sendDocument(chatId, fileStream, message || undefined);
+                  }
                 } else {
                   throw new Error(`Document file not found: ${filePath}`);
                 }

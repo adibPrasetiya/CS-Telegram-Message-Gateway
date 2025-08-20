@@ -1,6 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import prisma from '../utils/database';
 import { TelegramMessage } from '../types';
+import { Stream } from 'stream';
 
 export class TelegramService {
   private bot!: TelegramBot;
@@ -353,8 +354,9 @@ export class TelegramService {
     }
   }
 
-  async sendPhoto(chatId: number, photo: string, caption?: string): Promise<void> {
+  async sendPhoto(chatId: number, photo: string | Stream, caption?: string): Promise<void> {
     try {
+      console.log(`Sending photo to chat ${chatId}, type: ${typeof photo}`);
       await this.bot.sendPhoto(chatId, photo, { caption });
     } catch (error: any) {
       console.error('Error sending Telegram photo:', error);
@@ -377,8 +379,9 @@ export class TelegramService {
     }
   }
 
-  async sendDocument(chatId: number, document: string, caption?: string): Promise<void> {
+  async sendDocument(chatId: number, document: string | Stream, caption?: string): Promise<void> {
     try {
+      console.log(`Sending document to chat ${chatId}, type: ${typeof document}`);
       await this.bot.sendDocument(chatId, document, { caption });
     } catch (error: any) {
       console.error('Error sending Telegram document:', error);
@@ -401,8 +404,9 @@ export class TelegramService {
     }
   }
 
-  async sendVideo(chatId: number, video: string, caption?: string): Promise<void> {
+  async sendVideo(chatId: number, video: string | Stream, caption?: string): Promise<void> {
     try {
+      console.log(`Sending video to chat ${chatId}, type: ${typeof video}`);
       await this.bot.sendVideo(chatId, video, { caption });
     } catch (error: any) {
       console.error('Error sending Telegram video:', error);
