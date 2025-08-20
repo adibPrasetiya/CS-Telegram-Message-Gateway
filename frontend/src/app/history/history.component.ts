@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from "@angular/core";
+import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
@@ -122,12 +122,24 @@ import { DropdownOption, DateRange } from "../shared/components";
           </div>
           
           <!-- Session List Items -->
-          <div slot="list-items">
+          <div slot="list-items" class="sessions-scroll-container" #sessionsContainer>
             <app-list-item
               *ngFor="let session of sessions; trackBy: trackBySessionId"
               [data]="getListItemData(session)"
               (itemClick)="selectSession(session)">
             </app-list-item>
+            
+            <!-- Loading indicator for infinite scroll -->
+            <div *ngIf="historyService.isLoadingSessions() && sessions.length > 0" class="loading-more-indicator">
+              <i class="fas fa-spinner fa-spin"></i>
+              <span>Loading more sessions...</span>
+            </div>
+            
+            <!-- End of list indicator -->
+            <div *ngIf="!historyService.hasMoreSessions() && sessions.length > 0" class="end-of-list-indicator">
+              <i class="fas fa-check-circle"></i>
+              <span>All sessions loaded</span>
+            </div>
           </div>
         </app-list-panel>
       </div>
@@ -409,10 +421,13 @@ import { DropdownOption, DateRange } from "../shared/components";
   `,
   styleUrls: ["./history.component.css"],
 })
-export class HistoryComponent implements OnInit, OnDestroy {
+export class HistoryComponent implements OnInit, OnDestroy, AfterViewInit {
+  @ViewChild('sessionsContainer') sessionsContainer!: ElementRef<HTMLDivElement>;
   private destroy$ = new Subject<void>();
   private searchSubject = new Subject<string>();
   private clientNameSubject = new Subject<string>();
+  private sessionsScrollHandler = () => {}; // Will be overridden in setupSessionsScrollListener
+  private currentScrollableElement: Element | null = null;
 
   currentUser: User | null = null;
 
@@ -484,7 +499,7 @@ export class HistoryComponent implements OnInit, OnDestroy {
   ];
 
   constructor(
-    private historyService: HistoryService,
+    public historyService: HistoryService,
     private authService: AuthService,
     private router: Router
   ) {}
@@ -524,9 +539,21 @@ export class HistoryComponent implements OnInit, OnDestroy {
     this.loadSessions();
   }
 
+  ngAfterViewInit(): void {
+    // Add a small delay to ensure the view is fully initialized
+    setTimeout(() => {
+      this.setupSessionsScrollListener();
+    }, 100);
+  }
+
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    
+    // Clean up scroll listener
+    if (this.currentScrollableElement && this.sessionsScrollHandler) {
+      this.currentScrollableElement.removeEventListener('scroll', this.sessionsScrollHandler);
+    }
   }
 
   private updateNavigationItems(): void {
@@ -593,20 +620,64 @@ export class HistoryComponent implements OnInit, OnDestroy {
         delete filters[key as keyof typeof filters]
     );
 
+    // Reset sessions and load initial page with infinite scroll
+    this.historyService.resetSessions();
+    
     this.historyService
-      .getSessionHistory(page, 20, filters)
+      .loadInitialSessions(15, filters)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
+          console.log('Initial history sessions loaded:', response.sessions.length, 'of', response.pagination.totalCount);
           this.sessions = response.sessions;
           this.pagination = response.pagination;
+          this.historyService.updateSessionsFromResponse(response, false); // false = not appending
           this.loading = false;
         },
         error: (error) => {
           console.error("Error loading sessions:", error);
           this.loading = false;
+          this.historyService.setLoadingSessions(false);
         },
       });
+  }
+
+  private loadMoreSessions(): void {
+    if (this.historyService.isLoadingSessions() || !this.historyService.hasMoreSessions()) {
+      return;
+    }
+
+    console.log('Loading more history sessions...');
+
+    const filters = {
+      status: this.filters.status as "ACTIVE" | "ENDED" | undefined,
+      clientName: this.filters.clientName || undefined,
+      dateFrom: this.filters.dateFrom || undefined,
+      dateTo: this.filters.dateTo || undefined,
+    };
+
+    // Remove undefined values
+    Object.keys(filters).forEach(
+      (key) =>
+        filters[key as keyof typeof filters] === undefined &&
+        delete filters[key as keyof typeof filters]
+    );
+    
+    this.historyService.loadMoreSessions(filters).subscribe({
+      next: (response) => {
+        if (response) {
+          console.log('More history sessions loaded:', response.sessions.length, 'more sessions');
+          // Update the local sessions array
+          this.sessions = [...this.sessions, ...response.sessions];
+          this.pagination = response.pagination;
+          this.historyService.updateSessionsFromResponse(response, true); // true = appending
+        }
+      },
+      error: (error) => {
+        console.error('Error loading more history sessions:', error);
+        this.historyService.setLoadingSessions(false);
+      }
+    });
   }
 
   applyFilters(): void {
@@ -907,5 +978,85 @@ export class HistoryComponent implements OnInit, OnDestroy {
         day: 'numeric' 
       });
     }
+  }
+
+  private setupSessionsScrollListener(): void {
+    if (!this.sessionsContainer?.nativeElement) {
+      console.warn('Sessions container not available for scroll listener setup');
+      return;
+    }
+    
+    // Find the scrollable parent element (list panel content area)
+    let scrollableElement = this.sessionsContainer.nativeElement.parentElement;
+    while (scrollableElement && getComputedStyle(scrollableElement).overflowY !== 'auto' && 
+           getComputedStyle(scrollableElement).overflowY !== 'scroll') {
+      scrollableElement = scrollableElement.parentElement;
+    }
+    
+    if (!scrollableElement) {
+      console.warn('Could not find scrollable parent element');
+      return;
+    }
+    
+    let scrollTimeout: number;
+    
+    // Remove existing listener if any
+    if (this.currentScrollableElement) {
+      this.currentScrollableElement.removeEventListener('scroll', this.sessionsScrollHandler);
+    }
+    this.currentScrollableElement = scrollableElement;
+    
+    console.log('Setting up history sessions scroll listener with initial state:', {
+      hasMoreSessions: this.historyService.hasMoreSessions(),
+      sessionsCount: this.sessions.length,
+      scrollHeight: scrollableElement.scrollHeight,
+      clientHeight: scrollableElement.clientHeight,
+      canScroll: scrollableElement.scrollHeight > scrollableElement.clientHeight
+    });
+    
+    // Create the scroll handler for sessions
+    this.sessionsScrollHandler = () => {
+      // Debounce scroll events for performance
+      clearTimeout(scrollTimeout);
+      scrollTimeout = window.setTimeout(() => {
+        const scrollTop = scrollableElement!.scrollTop;
+        const scrollHeight = scrollableElement!.scrollHeight;
+        const clientHeight = scrollableElement!.clientHeight;
+        const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100; // 100px threshold from bottom
+        
+        // Debug scroll position
+        console.log('History sessions scroll event:', {
+          scrollTop,
+          scrollHeight,
+          clientHeight,
+          isNearBottom,
+          hasMoreSessions: this.historyService.hasMoreSessions(),
+          isLoading: this.historyService.isLoadingSessions(),
+          sessionsCount: this.sessions.length,
+          canScroll: scrollHeight > clientHeight
+        });
+        
+        // Check if user scrolled to bottom and all conditions are met
+        if (isNearBottom && 
+            this.historyService.hasMoreSessions() && 
+            !this.historyService.isLoadingSessions() &&
+            scrollHeight > clientHeight) { // Ensure container is actually scrollable
+          console.log('Triggering loadMoreSessions...');
+          this.loadMoreSessions();
+        }
+      }, 150); // Debounce time for better responsiveness
+    };
+    
+    scrollableElement.addEventListener('scroll', this.sessionsScrollHandler);
+    
+    // Also trigger an initial check in case the container is not scrollable yet
+    setTimeout(() => {
+      if (scrollableElement!.scrollHeight <= scrollableElement!.clientHeight && 
+          this.historyService.hasMoreSessions() && 
+          !this.historyService.isLoadingSessions()) {
+        console.log('History sessions container not scrollable, loading more sessions automatically');
+        this.loadMoreSessions();
+      }
+    }, 200);
   }
 }
