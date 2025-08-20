@@ -445,3 +445,89 @@
     font-size: 24px;
   }
 }
+
+/* Sessions Scroll Container Styles */
+.sessions-scroll-container {
+  /* Remove overflow-y auto to prevent duplicate scrollbars */
+  /* The parent list-panel already handles scrolling */
+  padding-right: 4px;
+  
+  /* Smooth scrolling behavior */
+  scroll-behavior: smooth;
+}
+
+/* Webkit scrollbar styling for sessions container */
+.sessions-scroll-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sessions-scroll-container::-webkit-scrollbar-track {
+  background: #17212b;
+  border-radius: 4px;
+}
+
+.sessions-scroll-container::-webkit-scrollbar-thumb {
+  background: #5288c1;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.sessions-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #4a7bb0;
+}
+
+.sessions-scroll-container::-webkit-scrollbar-thumb:active {
+  background: #3e6a96;
+}
+
+/* Loading and status indicators for sessions */
+.loading-more-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  color: #8696a8;
+  font-size: 14px;
+  background: #1a2332;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+
+.loading-more-indicator i {
+  color: #5288c1;
+  font-size: 16px;
+}
+
+.end-of-list-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+  color: #6c7b8a;
+  font-size: 13px;
+  font-style: italic;
+  border-top: 1px solid #1a252f;
+  margin-top: 8px;
+}
+
+.end-of-list-indicator i {
+  color: #4caf50;
+  font-size: 14px;
+}
+
+/* Spinner for loading states */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(82, 136, 193, 0.3);
+  border-top: 2px solid #5288c1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
