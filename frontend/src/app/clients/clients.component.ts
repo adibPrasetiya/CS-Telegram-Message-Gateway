@@ -14,7 +14,6 @@ import {
   ListItemComponent,
   SearchInputComponent,
   AvatarCircleComponent,
-  PaginationComponent,
   ToastComponent
 } from '../shared/components';
 import { NavigationItem } from '../shared/components/sidebar-navigation/sidebar-navigation.component';

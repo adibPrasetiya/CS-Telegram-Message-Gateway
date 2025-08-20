@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -27,7 +27,6 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
     SidebarNavigationComponent,
     ListPanelComponent,
     ListItemComponent,
-    PaginationComponent,
     ToastComponent
   ],
   template: `
@@ -76,21 +75,38 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
           </div>
           
           <!-- List Items -->
-          <div slot="list-items">
+          <div slot="list-items" class="broadcasts-scroll-container" #broadcastsContainer>
             <app-list-item
-              *ngFor="let broadcast of broadcasts"
+              *ngFor="let broadcast of broadcasts; trackBy: trackByBroadcastId"
               [data]="getListItemData(broadcast)"
               (itemClick)="selectBroadcast(broadcast)">
             </app-list-item>
+            
+            <!-- Loading indicator for infinite scroll -->
+            <div *ngIf="broadcastService.isLoadingBroadcasts() && broadcasts.length > 0" class="loading-more-indicator">
+              <i class="fas fa-spinner fa-spin"></i>
+              <span>Loading more broadcasts...</span>
+            </div>
+            
+            <!-- End of list indicator -->
+            <div *ngIf="!broadcastService.hasMoreBroadcasts() && broadcasts.length > 0" class="end-of-list-indicator">
+              <i class="fas fa-check-circle"></i>
+              <span>All broadcasts loaded</span>
+            </div>
           </div>
           
-          <!-- Pagination Footer -->
-          <div slot="footer">
-            <app-pagination
-              [pagination]="pagination"
-              (pageChange)="goToPage($event)"
-              [showTotalCount]="true">
-            </app-pagination>
+          <!-- Pagination Info Footer (showing current count) -->
+          <div slot="footer" *ngIf="pagination">
+            <div class="pagination-info">
+              <span class="pagination-count">
+                <i class="fas fa-bullhorn"></i>
+                Showing {{ broadcasts.length }} of {{ pagination.totalCount }} broadcasts
+              </span>
+              <span *ngIf="broadcastService.hasMoreBroadcasts()" class="pagination-more">
+                <i class="fas fa-chevron-down"></i>
+                Scroll for more
+              </span>
+            </div>
           </div>
         </app-list-panel>
       </div>
@@ -443,8 +459,11 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
   `,
   styleUrls: ['./broadcast.component.css']
 })
-export class BroadcastComponent implements OnInit, OnDestroy {
+export class BroadcastComponent implements OnInit, OnDestroy, AfterViewInit {
+  @ViewChild('broadcastsContainer') broadcastsContainer!: ElementRef<HTMLDivElement>;
   private destroy$ = new Subject<void>();
+  private broadcastsScrollHandler = () => {}; // Will be overridden in setupBroadcastsScrollListener
+  private currentScrollableElement: Element | null = null;
 
   currentUser: User | null = null;
   
@@ -547,7 +566,7 @@ export class BroadcastComponent implements OnInit, OnDestroy {
   };
 
   constructor(
-    private broadcastService: BroadcastService,
+    public broadcastService: BroadcastService,
     private authService: AuthService,
     private router: Router
   ) {}
@@ -562,29 +581,72 @@ export class BroadcastComponent implements OnInit, OnDestroy {
     this.loadBroadcasts();
   }
 
+  ngAfterViewInit(): void {
+    // Add a small delay to ensure the view is fully initialized
+    setTimeout(() => {
+      this.setupBroadcastsScrollListener();
+    }, 100);
+  }
+
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
     window.removeEventListener('resize', () => this.checkMobile());
+    
+    // Clean up scroll listener
+    if (this.currentScrollableElement && this.broadcastsScrollHandler) {
+      this.currentScrollableElement.removeEventListener('scroll', this.broadcastsScrollHandler);
+    }
   }
 
-  loadBroadcasts(page: number = 1): void {
+  loadBroadcasts(): void {
     this.loading = true;
+
+    // Reset broadcasts and load initial page with infinite scroll
+    this.broadcastService.resetBroadcasts();
     
-    this.broadcastService.getBroadcastHistory(page, 20)
+    this.broadcastService
+      .loadInitialBroadcasts(15)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
+          console.log('Initial broadcasts loaded:', response.broadcasts.length, 'of', response.pagination.totalCount);
           this.broadcasts = response.broadcasts;
           this.pagination = response.pagination;
+          this.broadcastService.updateBroadcastsFromResponse(response, false); // false = not appending
           this.loading = false;
         },
         error: (error) => {
           console.error('Error loading broadcasts:', error);
           this.showToast('Error loading broadcasts', 'error');
           this.loading = false;
+          this.broadcastService.setLoadingBroadcasts(false);
         }
       });
+  }
+
+  private loadMoreBroadcasts(): void {
+    if (this.broadcastService.isLoadingBroadcasts() || !this.broadcastService.hasMoreBroadcasts()) {
+      return;
+    }
+
+    console.log('Loading more broadcasts...');
+    
+    this.broadcastService.loadMoreBroadcasts().subscribe({
+      next: (response) => {
+        if (response) {
+          console.log('More broadcasts loaded:', response.broadcasts.length, 'more broadcasts');
+          // Update the local broadcasts array
+          this.broadcasts = [...this.broadcasts, ...response.broadcasts];
+          this.pagination = response.pagination;
+          this.broadcastService.updateBroadcastsFromResponse(response, true); // true = appending
+        }
+      },
+      error: (error) => {
+        console.error('Error loading more broadcasts:', error);
+        this.broadcastService.setLoadingBroadcasts(false);
+      }
+    });
   }
 
   selectBroadcast(broadcast: BroadcastHistoryItem): void {
@@ -698,9 +760,8 @@ export class BroadcastComponent implements OnInit, OnDestroy {
     return 'Send Broadcast';
   }
 
-  goToPage(page: number): void {
-    this.loadBroadcasts(page);
-  }
+  // Remove old pagination method
+  // goToPage method is no longer needed with infinite scroll
 
   goBack(): void {
     this.router.navigate(['/dashboard']);
@@ -1024,5 +1085,89 @@ export class BroadcastComponent implements OnInit, OnDestroy {
     }
     
     return hasValidMessage;
+  }
+
+  trackByBroadcastId(index: number, broadcast: any): string {
+    return broadcast.id;
+  }
+
+  private setupBroadcastsScrollListener(): void {
+    if (!this.broadcastsContainer?.nativeElement) {
+      console.warn('Broadcasts container not available for scroll listener setup');
+      return;
+    }
+    
+    // Find the scrollable parent element (list panel content area)
+    let scrollableElement = this.broadcastsContainer.nativeElement.parentElement;
+    while (scrollableElement && getComputedStyle(scrollableElement).overflowY !== 'auto' && 
+           getComputedStyle(scrollableElement).overflowY !== 'scroll') {
+      scrollableElement = scrollableElement.parentElement;
+    }
+    
+    if (!scrollableElement) {
+      console.warn('Could not find scrollable parent element');
+      return;
+    }
+    
+    let scrollTimeout: number;
+    
+    // Remove existing listener if any
+    if (this.currentScrollableElement) {
+      this.currentScrollableElement.removeEventListener('scroll', this.broadcastsScrollHandler);
+    }
+    this.currentScrollableElement = scrollableElement;
+    
+    console.log('Setting up broadcasts scroll listener with initial state:', {
+      hasMoreBroadcasts: this.broadcastService.hasMoreBroadcasts(),
+      broadcastsCount: this.broadcasts.length,
+      scrollHeight: scrollableElement.scrollHeight,
+      clientHeight: scrollableElement.clientHeight,
+      canScroll: scrollableElement.scrollHeight > scrollableElement.clientHeight
+    });
+    
+    // Create the scroll handler for broadcasts
+    this.broadcastsScrollHandler = () => {
+      // Debounce scroll events for performance
+      clearTimeout(scrollTimeout);
+      scrollTimeout = window.setTimeout(() => {
+        const scrollTop = scrollableElement!.scrollTop;
+        const scrollHeight = scrollableElement!.scrollHeight;
+        const clientHeight = scrollableElement!.clientHeight;
+        const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100; // 100px threshold from bottom
+        
+        // Debug scroll position
+        console.log('Broadcasts scroll event:', {
+          scrollTop,
+          scrollHeight,
+          clientHeight,
+          isNearBottom,
+          hasMoreBroadcasts: this.broadcastService.hasMoreBroadcasts(),
+          isLoading: this.broadcastService.isLoadingBroadcasts(),
+          broadcastsCount: this.broadcasts.length,
+          canScroll: scrollHeight > clientHeight
+        });
+        
+        // Check if user scrolled to bottom and all conditions are met
+        if (isNearBottom && 
+            this.broadcastService.hasMoreBroadcasts() && 
+            !this.broadcastService.isLoadingBroadcasts() &&
+            scrollHeight > clientHeight) { // Ensure container is actually scrollable
+          console.log('Triggering loadMoreBroadcasts...');
+          this.loadMoreBroadcasts();
+        }
+      }, 150); // Debounce time for better responsiveness
+    };
+    
+    scrollableElement.addEventListener('scroll', this.broadcastsScrollHandler);
+    
+    // Also trigger an initial check in case the container is not scrollable yet
+    setTimeout(() => {
+      if (scrollableElement!.scrollHeight <= scrollableElement!.clientHeight && 
+          this.broadcastService.hasMoreBroadcasts() && 
+          !this.broadcastService.isLoadingBroadcasts()) {
+        console.log('Broadcasts container not scrollable, loading more broadcasts automatically');
+        this.loadMoreBroadcasts();
+      }
+    }, 200);
   }
 }

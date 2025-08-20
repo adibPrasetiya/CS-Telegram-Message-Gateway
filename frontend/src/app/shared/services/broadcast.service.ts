@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, BehaviorSubject } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 export interface BroadcastRequest {
@@ -38,15 +38,20 @@ export interface BroadcastHistoryItem {
   };
 }
 
+export interface PaginationInfo {
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+  hasMore?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
 export interface BroadcastHistoryResponse {
   broadcasts: BroadcastHistoryItem[];
-  pagination: {
-    currentPage: number;
-    totalPages: number;
-    totalCount: number;
-    hasNextPage: boolean;
-    hasPrevPage: boolean;
-  };
+  pagination: PaginationInfo;
 }
 
 export interface BroadcastDetails {
@@ -83,6 +88,16 @@ export interface BroadcastDetails {
 export class BroadcastService {
   private apiUrl = `${environment.apiUrl}/broadcast`;
 
+  // Reactive state management for infinite scroll
+  private broadcastsSubject = new BehaviorSubject<BroadcastHistoryItem[]>([]);
+  public broadcasts$ = this.broadcastsSubject.asObservable();
+
+  private paginationInfoSubject = new BehaviorSubject<PaginationInfo | null>(null);
+  public paginationInfo$ = this.paginationInfoSubject.asObservable();
+
+  private loadingBroadcastsSubject = new BehaviorSubject<boolean>(false);
+  public loadingBroadcasts$ = this.loadingBroadcastsSubject.asObservable();
+
   constructor(private http: HttpClient) {}
 
   sendBroadcast(broadcastData: BroadcastRequest): Observable<BroadcastResponse> {
@@ -111,5 +126,92 @@ export class BroadcastService {
 
   getBroadcastDetails(broadcastId: string): Observable<BroadcastDetails> {
     return this.http.get<BroadcastDetails>(`${this.apiUrl}/${broadcastId}`);
+  }
+
+  // Enhanced methods for infinite scroll
+  getBroadcastHistoryWithOffset(
+    limit: number = 15,
+    offset: number = 0
+  ): Observable<BroadcastHistoryResponse> {
+    const params = new HttpParams()
+      .set('page', Math.floor(offset / limit) + 1)
+      .set('limit', limit.toString());
+
+    return this.http.get<BroadcastHistoryResponse>(`${this.apiUrl}/history`, { params });
+  }
+
+  // Load initial broadcasts for infinite scroll
+  loadInitialBroadcasts(limit: number = 15): Observable<BroadcastHistoryResponse> {
+    this.loadingBroadcastsSubject.next(true);
+    return this.getBroadcastHistoryWithOffset(limit, 0);
+  }
+
+  // Load more broadcasts for infinite scroll
+  loadMoreBroadcasts(): Observable<BroadcastHistoryResponse | null> {
+    const currentPagination = this.paginationInfoSubject.value;
+    const currentBroadcasts = this.broadcastsSubject.value;
+    
+    if (!currentPagination || !currentPagination.hasNextPage || this.loadingBroadcastsSubject.value) {
+      return new Observable(subscriber => subscriber.next(null));
+    }
+
+    this.loadingBroadcastsSubject.next(true);
+    const nextOffset = currentBroadcasts.length;
+    const limit = currentPagination.limit || 15;
+    return this.getBroadcastHistoryWithOffset(limit, nextOffset);
+  }
+
+  // Update broadcasts and pagination info from response
+  updateBroadcastsFromResponse(response: BroadcastHistoryResponse, append = false): void {
+    this.loadingBroadcastsSubject.next(false);
+    
+    if (append) {
+      // For infinite scroll - append new broadcasts to existing ones
+      const currentBroadcasts = this.broadcastsSubject.value;
+      const newBroadcasts = [...currentBroadcasts, ...response.broadcasts];
+      this.broadcastsSubject.next(newBroadcasts);
+    } else {
+      // For initial load - replace all broadcasts
+      this.broadcastsSubject.next(response.broadcasts);
+    }
+    
+    // Enhanced pagination info
+    const enhancedPagination = {
+      ...response.pagination,
+      hasMore: response.pagination.hasNextPage,
+      limit: response.broadcasts.length > 0 ? response.broadcasts.length : 15,
+      offset: (response.pagination.currentPage - 1) * (response.broadcasts.length || 15)
+    };
+    
+    this.paginationInfoSubject.next(enhancedPagination);
+  }
+
+  // Reset broadcasts (for refresh)
+  resetBroadcasts(): void {
+    this.broadcastsSubject.next([]);
+    this.paginationInfoSubject.next(null);
+    this.loadingBroadcastsSubject.next(false);
+  }
+
+  // Getters for current state
+  getCurrentBroadcasts(): BroadcastHistoryItem[] {
+    return this.broadcastsSubject.value;
+  }
+
+  getCurrentPaginationInfo(): PaginationInfo | null {
+    return this.paginationInfoSubject.value;
+  }
+
+  isLoadingBroadcasts(): boolean {
+    return this.loadingBroadcastsSubject.value;
+  }
+
+  hasMoreBroadcasts(): boolean {
+    const pagination = this.paginationInfoSubject.value;
+    return pagination ? pagination.hasNextPage : false;
+  }
+
+  setLoadingBroadcasts(loading: boolean): void {
+    this.loadingBroadcastsSubject.next(loading);
   }
 }
