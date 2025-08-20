@@ -31,7 +31,9 @@ export class TelegramService {
         polling: {
           interval: 1000,
           autoStart: true,
-        }
+        },
+        // Suppress deprecation warning about file content-type
+        filepath: false
       });
       this.setupMessageHandlers();
       TelegramService.instance = this;
