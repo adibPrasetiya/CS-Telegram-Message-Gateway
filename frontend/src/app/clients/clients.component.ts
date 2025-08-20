@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -77,21 +77,38 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
           </app-search-input>
           
           <!-- Client List Items -->
-          <div slot="list-items">
+          <div slot="list-items" class="clients-scroll-container" #clientsContainer>
             <app-list-item
-              *ngFor="let client of clients"
+              *ngFor="let client of clients; trackBy: trackByClientId"
               [data]="getListItemData(client)"
               (itemClick)="selectClient(client)">
             </app-list-item>
+            
+            <!-- Loading indicator for infinite scroll -->
+            <div *ngIf="clientService.isLoadingClients() && clients.length > 0" class="loading-more-indicator">
+              <i class="fas fa-spinner fa-spin"></i>
+              <span>Loading more clients...</span>
+            </div>
+            
+            <!-- End of list indicator -->
+            <div *ngIf="!clientService.hasMoreClients() && clients.length > 0" class="end-of-list-indicator">
+              <i class="fas fa-check-circle"></i>
+              <span>All clients loaded</span>
+            </div>
           </div>
           
-          <!-- Pagination Footer -->
-          <div slot="footer">
-            <app-pagination
-              [pagination]="pagination"
-              (pageChange)="goToPage($event)"
-              [showTotalCount]="true">
-            </app-pagination>
+          <!-- Pagination Info Footer (showing current count) -->
+          <div slot="footer" *ngIf="pagination">
+            <div class="pagination-info">
+              <span class="pagination-count">
+                <i class="fas fa-users"></i>
+                Showing {{ clients.length }} of {{ pagination.totalCount }} clients
+              </span>
+              <span *ngIf="clientService.hasMoreClients()" class="pagination-more">
+                <i class="fas fa-chevron-down"></i>
+                Scroll for more
+              </span>
+            </div>
           </div>
         </app-list-panel>
       </div>
@@ -228,9 +245,12 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
   `,
   styleUrls: ['./clients.component.css']
 })
-export class ClientsComponent implements OnInit, OnDestroy {
+export class ClientsComponent implements OnInit, OnDestroy, AfterViewInit {
+  @ViewChild('clientsContainer') clientsContainer!: ElementRef<HTMLDivElement>;
   private destroy$ = new Subject<void>();
   private searchSubject = new Subject<string>();
+  private clientsScrollHandler = () => {}; // Will be overridden in setupClientsScrollListener
+  private currentScrollableElement: Element | null = null;
 
   currentUser: User | null = null;
   
@@ -293,7 +313,7 @@ export class ClientsComponent implements OnInit, OnDestroy {
   };
 
   constructor(
-    private clientService: ClientService,
+    public clientService: ClientService,
     private authService: AuthService,
     private router: Router
   ) {}
@@ -307,7 +327,7 @@ export class ClientsComponent implements OnInit, OnDestroy {
       distinctUntilChanged(),
       takeUntil(this.destroy$)
     ).subscribe(query => {
-      this.loadClients(1);
+      this.loadClients();
     });
 
     // Check for mobile
@@ -317,29 +337,72 @@ export class ClientsComponent implements OnInit, OnDestroy {
     this.loadClients();
   }
 
+  ngAfterViewInit(): void {
+    // Add a small delay to ensure the view is fully initialized
+    setTimeout(() => {
+      this.setupClientsScrollListener();
+    }, 100);
+  }
+
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
     window.removeEventListener('resize', () => this.checkMobile());
+    
+    // Clean up scroll listener
+    if (this.currentScrollableElement && this.clientsScrollHandler) {
+      this.currentScrollableElement.removeEventListener('scroll', this.clientsScrollHandler);
+    }
   }
 
-  loadClients(page: number = 1): void {
+  loadClients(): void {
     this.loading = true;
+
+    // Reset clients and load initial page with infinite scroll
+    this.clientService.resetClients();
     
-    this.clientService.getClients(page, 20, this.searchQuery || undefined)
+    this.clientService
+      .loadInitialClients(15, this.searchQuery || undefined)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
+          console.log('Initial clients loaded:', response.clients.length, 'of', response.pagination.totalCount);
           this.clients = response.clients;
           this.pagination = response.pagination;
+          this.clientService.updateClientsFromResponse(response, false); // false = not appending
           this.loading = false;
         },
         error: (error) => {
           console.error('Error loading clients:', error);
           this.showToast('Error loading clients', 'error');
           this.loading = false;
+          this.clientService.setLoadingClients(false);
         }
       });
+  }
+
+  private loadMoreClients(): void {
+    if (this.clientService.isLoadingClients() || !this.clientService.hasMoreClients()) {
+      return;
+    }
+
+    console.log('Loading more clients...');
+    
+    this.clientService.loadMoreClients(this.searchQuery || undefined).subscribe({
+      next: (response) => {
+        if (response) {
+          console.log('More clients loaded:', response.clients.length, 'more clients');
+          // Update the local clients array
+          this.clients = [...this.clients, ...response.clients];
+          this.pagination = response.pagination;
+          this.clientService.updateClientsFromResponse(response, true); // true = appending
+        }
+      },
+      error: (error) => {
+        console.error('Error loading more clients:', error);
+        this.clientService.setLoadingClients(false);
+      }
+    });
   }
 
   selectClient(client: ClientListItem): void {
@@ -403,9 +466,8 @@ export class ClientsComponent implements OnInit, OnDestroy {
     this.searchSubject.next(this.searchQuery);
   }
 
-  goToPage(page: number): void {
-    this.loadClients(page);
-  }
+  // Remove old pagination method
+  // goToPage method is no longer needed with infinite scroll
 
   goBack(): void {
     this.router.navigate(['/dashboard']);
@@ -514,5 +576,89 @@ export class ClientsComponent implements OnInit, OnDestroy {
         totalSessions: client.totalSessions
       }
     };
+  }
+
+  trackByClientId(index: number, client: any): string {
+    return client.id;
+  }
+
+  private setupClientsScrollListener(): void {
+    if (!this.clientsContainer?.nativeElement) {
+      console.warn('Clients container not available for scroll listener setup');
+      return;
+    }
+    
+    // Find the scrollable parent element (list panel content area)
+    let scrollableElement = this.clientsContainer.nativeElement.parentElement;
+    while (scrollableElement && getComputedStyle(scrollableElement).overflowY !== 'auto' && 
+           getComputedStyle(scrollableElement).overflowY !== 'scroll') {
+      scrollableElement = scrollableElement.parentElement;
+    }
+    
+    if (!scrollableElement) {
+      console.warn('Could not find scrollable parent element');
+      return;
+    }
+    
+    let scrollTimeout: number;
+    
+    // Remove existing listener if any
+    if (this.currentScrollableElement) {
+      this.currentScrollableElement.removeEventListener('scroll', this.clientsScrollHandler);
+    }
+    this.currentScrollableElement = scrollableElement;
+    
+    console.log('Setting up clients scroll listener with initial state:', {
+      hasMoreClients: this.clientService.hasMoreClients(),
+      clientsCount: this.clients.length,
+      scrollHeight: scrollableElement.scrollHeight,
+      clientHeight: scrollableElement.clientHeight,
+      canScroll: scrollableElement.scrollHeight > scrollableElement.clientHeight
+    });
+    
+    // Create the scroll handler for clients
+    this.clientsScrollHandler = () => {
+      // Debounce scroll events for performance
+      clearTimeout(scrollTimeout);
+      scrollTimeout = window.setTimeout(() => {
+        const scrollTop = scrollableElement!.scrollTop;
+        const scrollHeight = scrollableElement!.scrollHeight;
+        const clientHeight = scrollableElement!.clientHeight;
+        const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100; // 100px threshold from bottom
+        
+        // Debug scroll position
+        console.log('Clients scroll event:', {
+          scrollTop,
+          scrollHeight,
+          clientHeight,
+          isNearBottom,
+          hasMoreClients: this.clientService.hasMoreClients(),
+          isLoading: this.clientService.isLoadingClients(),
+          clientsCount: this.clients.length,
+          canScroll: scrollHeight > clientHeight
+        });
+        
+        // Check if user scrolled to bottom and all conditions are met
+        if (isNearBottom && 
+            this.clientService.hasMoreClients() && 
+            !this.clientService.isLoadingClients() &&
+            scrollHeight > clientHeight) { // Ensure container is actually scrollable
+          console.log('Triggering loadMoreClients...');
+          this.loadMoreClients();
+        }
+      }, 150); // Debounce time for better responsiveness
+    };
+    
+    scrollableElement.addEventListener('scroll', this.clientsScrollHandler);
+    
+    // Also trigger an initial check in case the container is not scrollable yet
+    setTimeout(() => {
+      if (scrollableElement!.scrollHeight <= scrollableElement!.clientHeight && 
+          this.clientService.hasMoreClients() && 
+          !this.clientService.isLoadingClients()) {
+        console.log('Clients container not scrollable, loading more clients automatically');
+        this.loadMoreClients();
+      }
+    }, 200);
   }
 }
