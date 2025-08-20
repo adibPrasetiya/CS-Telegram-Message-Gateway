@@ -118,8 +118,25 @@ export class BroadcastController {
       const delayBetweenMessages = 1000; // 1 second delay to respect Telegram rate limits
       const retryAttempts = 3;
 
-      // Bind methods to avoid 'this' context issues in nested loops
-      const getLocalFilePath = this.getLocalFilePath.bind(this);
+      // Create safe file path converter function (fallback if method binding fails)
+      const getLocalFilePath = (fileUrl: string): string => {
+        try {
+          if (!fileUrl) {
+            throw new Error('File URL is required');
+          }
+          
+          // Convert URL to local file path
+          // Example: http://localhost:3000/uploads/filename.jpg -> uploads/filename.jpg
+          const url = new URL(fileUrl);
+          const relativePath = url.pathname.substring(1); // Remove leading slash
+          const fullPath = path.join(__dirname, '../..', relativePath);
+          console.log(`Converting URL ${fileUrl} to local path: ${fullPath}`);
+          return fullPath;
+        } catch (error) {
+          console.error(`Error converting file URL to local path: ${fileUrl}`, error);
+          throw new Error(`Invalid file URL: ${fileUrl}`);
+        }
+      };
       
       console.log(`Broadcast details - Message: "${message}", Type: ${messageType}, File: ${fileUrl ? 'YES' : 'NO'}`);
 
