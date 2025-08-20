@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { BroadcastService, BroadcastRequest, BroadcastHistoryItem, BroadcastDetails } from '../shared/services/broadcast.service';
+import { BroadcastService, BroadcastRequest, BroadcastHistoryItem, BroadcastDetails, BroadcastRecipient } from '../shared/services/broadcast.service';
 import { AuthService } from '../shared/services/auth.service';
 import { User } from '../shared/models';
 import { SidebarContainerComponent } from '../shared/components/sidebar-container/sidebar-container.component';
@@ -12,6 +12,7 @@ import { SidebarNavigationComponent } from '../shared/components/sidebar-navigat
 import { ListPanelComponent } from '../shared/components/list-panel/list-panel.component';
 import { ListItemComponent } from '../shared/components/list-item/list-item.component';
 import { PaginationComponent } from '../shared/components/pagination/pagination.component';
+import { SearchInputComponent } from '../shared/components/search-input/search-input.component';
 import { ToastComponent } from '../shared/components/toast/toast.component';
 import { NavigationItem } from '../shared/components/sidebar-navigation/sidebar-navigation.component';
 import { ListPanelConfig } from '../shared/components/list-panel/list-panel.component';
@@ -27,6 +28,8 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
     SidebarNavigationComponent,
     ListPanelComponent,
     ListItemComponent,
+    SearchInputComponent,
+    PaginationComponent,
     ToastComponent
   ],
   template: `
@@ -413,34 +416,94 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
           </div>
 
           <div class="recipients-section" *ngIf="broadcastDetails">
-            <h4>Recipients ({{ broadcastDetails.recipients.length }})</h4>
-            <div class="recipients-list">
-              <div 
-                *ngFor="let recipient of broadcastDetails.recipients" 
-                class="recipient-item"
-                [class]="'status-' + recipient.status.toLowerCase()">
-                <div class="recipient-info">
-                  <div class="recipient-avatar">
-                    {{ recipient.client.name.charAt(0).toUpperCase() }}
-                  </div>
-                  <div class="recipient-details">
-                    <h5 class="recipient-name">{{ recipient.client.name }}</h5>
-                    <p class="recipient-username">
-                      <span *ngIf="recipient.client.username">{{ '@' + recipient.client.username }}</span>
-                      <span *ngIf="!recipient.client.username">No username</span>
-                      <span class="telegram-id"> • ID: {{ recipient.client.telegramId }}</span>
-                    </p>
-                  </div>
+            <div class="recipients-header">
+              <h4>Recipients ({{ broadcastDetails.statistics?.total || 0 }})</h4>
+              
+              <!-- Recipient Filters -->
+              <div class="recipients-filters">
+                <!-- Status Filter -->
+                <div class="filter-group">
+                  <label>Status:</label>
+                  <select [(ngModel)]="recipientStatusFilter" (change)="onRecipientFilterChange()">
+                    <option value="ALL">All ({{ broadcastDetails.statistics?.total || 0 }})</option>
+                    <option value="SENT">Sent ({{ broadcastDetails.statistics?.sent || 0 }})</option>
+                    <option value="FAILED">Failed ({{ broadcastDetails.statistics?.failed || 0 }})</option>
+                    <option value="PENDING">Pending ({{ broadcastDetails.statistics?.pending || 0 }})</option>
+                  </select>
                 </div>
-                <div class="recipient-status">
-                  <span class="status-badge" [class]="'status-' + recipient.status.toLowerCase()">
-                    {{ recipient.status }}
-                  </span>
-                  <span *ngIf="recipient.sentAt" class="sent-time">
-                    {{ formatTime(recipient.sentAt) }}
-                  </span>
+                
+                <!-- Search Filter -->
+                <div class="filter-group">
+                  <app-search-input
+                    [(ngModel)]="recipientSearchQuery"
+                    (search)="onRecipientSearchChange()"
+                    placeholder="Search recipients..."
+                    [loading]="loadingRecipients">
+                  </app-search-input>
                 </div>
               </div>
+            </div>
+            
+            <div class="recipients-list">
+              <!-- Loading indicator -->
+              <div *ngIf="loadingRecipients" class="recipients-loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Loading recipients...</span>
+              </div>
+              
+              <!-- Recipients list -->
+              <div *ngIf="!loadingRecipients">
+                <div 
+                  *ngFor="let recipient of recipients; trackBy: trackByRecipientId" 
+                  class="recipient-item"
+                  [class]="'status-' + recipient.status.toLowerCase()">
+                  <div class="recipient-info">
+                    <div class="recipient-avatar">
+                      {{ recipient.client.name.charAt(0).toUpperCase() }}
+                    </div>
+                    <div class="recipient-details">
+                      <h5 class="recipient-name">{{ recipient.client.name }}</h5>
+                      <p class="recipient-username">
+                        <span *ngIf="recipient.client.username">{{ '@' + recipient.client.username }}</span>
+                        <span *ngIf="!recipient.client.username">No username</span>
+                        <span class="telegram-id"> • ID: {{ recipient.client.telegramId }}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="recipient-status">
+                    <span class="status-badge" [class]="'status-' + recipient.status.toLowerCase()">
+                      {{ recipient.status }}
+                    </span>
+                    <span *ngIf="recipient.sentAt" class="sent-time">
+                      {{ formatTime(recipient.sentAt) }}
+                    </span>
+                  </div>
+                </div>
+                
+                <!-- No recipients found -->
+                <div *ngIf="recipients.length === 0" class="no-recipients">
+                  <i class="fas fa-user-slash"></i>
+                  <p>No recipients found</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Traditional Pagination -->
+            <div class="recipients-pagination" *ngIf="recipientsPagination && recipientsPagination.totalPages > 1">
+              <app-pagination
+                [pagination]="recipientsPagination"
+                [showPageNumbers]="true"
+                [showFirstLast]="true"
+                (pageChange)="goToRecipientPage($event)">
+              </app-pagination>
+            </div>
+            
+            <!-- Pagination Info -->
+            <div class="recipients-pagination-info" *ngIf="recipientsPagination">
+              <span class="pagination-count">
+                <i class="fas fa-users"></i>
+                Showing {{ getRecipientRangeText() }} of {{ recipientsPagination.totalCount }} recipients
+              </span>
             </div>
           </div>
         </div>
@@ -475,6 +538,16 @@ export class BroadcastComponent implements OnInit, OnDestroy, AfterViewInit {
   // Selected broadcast
   selectedBroadcast: BroadcastHistoryItem | null = null;
   broadcastDetails: BroadcastDetails | null = null;
+
+  // Recipients pagination
+  recipients: BroadcastRecipient[] = [];
+  recipientsPagination: any = null;
+  loadingRecipients = false;
+  recipientStatusFilter: 'ALL' | 'PENDING' | 'SENT' | 'FAILED' = 'ALL';
+  recipientSearchQuery = '';
+  recipientsPerPage = 20;
+  currentRecipientPage = 1;
+  private recipientSearchSubject = new Subject<string>();
 
   // New broadcast form
   showNewBroadcastForm = false;
@@ -574,6 +647,16 @@ export class BroadcastComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnInit(): void {
     this.currentUser = this.authService.getCurrentUser();
     
+    // Setup recipient search debouncing
+    this.recipientSearchSubject.pipe(
+      debounceTime(500),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.currentRecipientPage = 1; // Reset to first page when search changes
+      this.loadRecipients(1);
+    });
+    
     // Check for mobile
     this.checkMobile();
     window.addEventListener('resize', () => this.checkMobile());
@@ -593,7 +676,7 @@ export class BroadcastComponent implements OnInit, OnDestroy, AfterViewInit {
     this.destroy$.complete();
     window.removeEventListener('resize', () => this.checkMobile());
     
-    // Clean up scroll listener
+    // Clean up broadcast scroll listener
     if (this.currentScrollableElement && this.broadcastsScrollHandler) {
       this.currentScrollableElement.removeEventListener('scroll', this.broadcastsScrollHandler);
     }
@@ -661,7 +744,34 @@ export class BroadcastComponent implements OnInit, OnDestroy, AfterViewInit {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (details) => {
+          // Handle backward compatibility - if statistics don't exist, create them from existing data
+          if (!details.statistics && details.recipients) {
+            const total = details.recipients.length;
+            const sent = details.recipients.filter(r => r.status === 'SENT').length;
+            const failed = details.recipients.filter(r => r.status === 'FAILED').length;
+            const pending = details.recipients.filter(r => r.status === 'PENDING').length;
+            
+            details.statistics = {
+              total,
+              sent,
+              failed,
+              pending
+            };
+          } else if (!details.statistics) {
+            // If no statistics and no recipients, create from basic counts
+            details.statistics = {
+              total: details.recipientCount || 0,
+              sent: details.sentCount || 0,
+              failed: details.failedCount || 0,
+              pending: (details.recipientCount || 0) - (details.sentCount || 0) - (details.failedCount || 0)
+            };
+          }
+          
           this.broadcastDetails = details;
+          console.log('Broadcast details loaded:', details);
+          
+          // Load recipients with pagination (or use existing recipients as fallback)
+          this.loadRecipients();
         },
         error: (error) => {
           console.error('Error loading broadcast details:', error);
@@ -1170,4 +1280,116 @@ export class BroadcastComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }, 200);
   }
+
+  // Recipients pagination methods
+  loadRecipients(page: number = 1): void {
+    if (!this.selectedBroadcast) return;
+
+    this.loadingRecipients = true;
+    this.currentRecipientPage = page;
+
+    const statusFilter = this.recipientStatusFilter === 'ALL' ? undefined : this.recipientStatusFilter as 'PENDING' | 'SENT' | 'FAILED';
+    const searchQuery = this.recipientSearchQuery || undefined;
+
+    console.log('Loading recipients for broadcast:', this.selectedBroadcast.id, 'page:', page);
+
+    this.broadcastService
+      .getBroadcastRecipients(this.selectedBroadcast.id, page, this.recipientsPerPage, statusFilter, searchQuery)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          console.log('Recipients loaded for page', page + ':', response.recipients.length, 'of', response.pagination.totalCount);
+          this.recipients = response.recipients;
+          this.recipientsPagination = response.pagination;
+          this.loadingRecipients = false;
+        },
+        error: (error) => {
+          console.error('Error loading recipients via pagination API:', error);
+          
+          // Fallback: Try to use recipients from broadcast details if available
+          if (this.broadcastDetails?.recipients && page === 1) {
+            console.log('Falling back to using recipients from broadcast details');
+            this.useFallbackRecipients();
+          } else {
+            this.showToast('Error loading recipients', 'error');
+            this.loadingRecipients = false;
+          }
+        }
+      });
+  }
+
+  private useFallbackRecipients(): void {
+    if (!this.broadcastDetails?.recipients) return;
+
+    let filteredRecipients = [...this.broadcastDetails.recipients];
+
+    // Apply status filter
+    if (this.recipientStatusFilter !== 'ALL') {
+      filteredRecipients = filteredRecipients.filter(r => r.status === this.recipientStatusFilter);
+    }
+
+    // Apply search filter
+    if (this.recipientSearchQuery) {
+      const query = this.recipientSearchQuery.toLowerCase();
+      filteredRecipients = filteredRecipients.filter(r => 
+        r.client.name.toLowerCase().includes(query) ||
+        (r.client.username && r.client.username.toLowerCase().includes(query)) ||
+        r.client.telegramId.includes(query)
+      );
+    }
+
+    // Apply pagination to filtered results
+    const totalCount = filteredRecipients.length;
+    const totalPages = Math.ceil(totalCount / this.recipientsPerPage);
+    const startIndex = (this.currentRecipientPage - 1) * this.recipientsPerPage;
+    const endIndex = startIndex + this.recipientsPerPage;
+    const paginatedRecipients = filteredRecipients.slice(startIndex, endIndex);
+
+    this.recipients = paginatedRecipients;
+    this.recipientsPagination = {
+      currentPage: this.currentRecipientPage,
+      totalPages: totalPages,
+      totalCount: totalCount,
+      hasNextPage: this.currentRecipientPage < totalPages,
+      hasPrevPage: this.currentRecipientPage > 1,
+      hasMore: this.currentRecipientPage < totalPages
+    };
+    
+    this.loadingRecipients = false;
+    console.log('Using fallback recipients:', paginatedRecipients.length, 'of', totalCount, 'recipients on page', this.currentRecipientPage);
+  }
+
+  goToRecipientPage(page: number): void {
+    if (page === this.currentRecipientPage) return;
+    this.loadRecipients(page);
+  }
+
+  getRecipientRangeText(): string {
+    if (!this.recipientsPagination || this.recipients.length === 0) return '0';
+    
+    const start = (this.recipientsPagination.currentPage - 1) * this.recipientsPerPage + 1;
+    const end = Math.min(start + this.recipients.length - 1, this.recipientsPagination.totalCount);
+    
+    if (start === end) {
+      return start.toString();
+    }
+    
+    return `${start}-${end}`;
+  }
+
+  onRecipientFilterChange(): void {
+    console.log('Recipient filter changed:', this.recipientStatusFilter);
+    this.currentRecipientPage = 1; // Reset to first page when filter changes
+    this.loadRecipients(1);
+  }
+
+  onRecipientSearchChange(): void {
+    console.log('Recipient search changed:', this.recipientSearchQuery);
+    this.recipientSearchSubject.next(this.recipientSearchQuery);
+  }
+
+  trackByRecipientId(index: number, recipient: any): string {
+    return recipient.id;
+  }
+
 }

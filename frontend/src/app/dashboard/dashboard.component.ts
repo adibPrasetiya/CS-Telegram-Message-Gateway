@@ -18,6 +18,7 @@ import {
   ListItemComponent,
   SearchInputComponent
 } from '../shared/components';
+import { SettingsComponent } from '../settings/settings.component';
 
 @Component({
   selector: 'app-dashboard',
@@ -29,7 +30,8 @@ import {
     SidebarNavigationComponent,
     ListPanelComponent,
     ListItemComponent,
-    SearchInputComponent
+    SearchInputComponent,
+    SettingsComponent
   ],
   template: `
     <!-- End Session Confirmation Dialog -->
@@ -118,50 +120,15 @@ import {
           </div>
         </app-list-panel>
 
-        <!-- Settings Panel -->
-        <app-list-panel *ngIf="activeMenuTab === 'settings' && currentUser?.role === 'ADMIN'"
-          [config]="settingsConfig"
-          [titleIcon]="'fa-cog'">
-          
-          <div slot="list-items" class="settings-content">
-            <div class="settings-section">
-              <h4>Account</h4>
-              <div class="setting-item">
-                <div class="setting-info">
-                  <strong>{{ currentUser?.name }}</strong>
-                  <span>{{ currentUser?.email }}</span>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div class="setting-info">
-                  <strong>Role</strong>
-                  <span>{{ currentUser?.role }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="settings-section">
-              <h4>Notifications</h4>
-              <div class="setting-item">
-                <label class="setting-toggle">
-                  <input type="checkbox" [checked]="notificationSettings.sound">
-                  <span>Sound notifications</span>
-                </label>
-              </div>
-              <div class="setting-item">
-                <label class="setting-toggle">
-                  <input type="checkbox" [checked]="notificationSettings.desktop">
-                  <span>Desktop notifications</span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </app-list-panel>
       </div>
 
       <!-- Main Content Area -->
       <div slot="main-content" class="chat-main-area" [class.mobile-hidden]="!showMobileChat && isMobile">
-        <div *ngIf="!activeSession" class="welcome-screen">
+        <!-- Settings Content -->
+        <app-settings *ngIf="activeMenuTab === 'settings'"></app-settings>
+        
+        <!-- Welcome Screen -->
+        <div *ngIf="!activeSession && activeMenuTab !== 'settings'" class="welcome-screen">
           <div class="welcome-content">
             <i class="fas fa-comments welcome-icon"></i>
             <h2>Telegram Help Desk</h2>
@@ -1041,6 +1008,7 @@ import {
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
+
   `]
 })
 export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
@@ -1101,6 +1069,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
     sound: true,
     desktop: true
   };
+
 
   constructor(
     private authService: AuthService,
@@ -2009,4 +1978,5 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
       this.filterChats();
     }
   }
+
 }

@@ -54,6 +54,24 @@ export interface BroadcastHistoryResponse {
   pagination: PaginationInfo;
 }
 
+export interface BroadcastRecipient {
+  id: string;
+  status: 'PENDING' | 'SENT' | 'FAILED';
+  sentAt?: string;
+  createdAt: string;
+  client: {
+    id: string;
+    name: string;
+    username?: string;
+    telegramId: string;
+  };
+}
+
+export interface BroadcastRecipientsResponse {
+  recipients: BroadcastRecipient[];
+  pagination: PaginationInfo;
+}
+
 export interface BroadcastDetails {
   id: string;
   message: string;
@@ -62,13 +80,16 @@ export interface BroadcastDetails {
   status: 'PENDING' | 'SENDING' | 'COMPLETED' | 'FAILED';
   recipientCount: number;
   sentCount: number;
+  failedCount?: number;
+  pendingCount?: number;
   createdAt: string;
   sender: {
     id: string;
     name: string;
     email: string;
   };
-  recipients: Array<{
+  // For backward compatibility with existing API
+  recipients?: Array<{
     id: string;
     status: 'PENDING' | 'SENT' | 'FAILED';
     sentAt?: string;
@@ -80,6 +101,13 @@ export interface BroadcastDetails {
       telegramId: string;
     };
   }>;
+  // New statistics structure
+  statistics?: {
+    total: number;
+    sent: number;
+    failed: number;
+    pending: number;
+  };
 }
 
 @Injectable({
@@ -97,6 +125,16 @@ export class BroadcastService {
 
   private loadingBroadcastsSubject = new BehaviorSubject<boolean>(false);
   public loadingBroadcasts$ = this.loadingBroadcastsSubject.asObservable();
+
+  // Recipients pagination state management
+  private recipientsSubject = new BehaviorSubject<BroadcastRecipient[]>([]);
+  public recipients$ = this.recipientsSubject.asObservable();
+
+  private recipientsPaginationSubject = new BehaviorSubject<PaginationInfo | null>(null);
+  public recipientsPagination$ = this.recipientsPaginationSubject.asObservable();
+
+  private loadingRecipientsSubject = new BehaviorSubject<boolean>(false);
+  public loadingRecipients$ = this.loadingRecipientsSubject.asObservable();
 
   constructor(private http: HttpClient) {}
 
@@ -213,5 +251,105 @@ export class BroadcastService {
 
   setLoadingBroadcasts(loading: boolean): void {
     this.loadingBroadcastsSubject.next(loading);
+  }
+
+  // Recipients pagination methods
+  getBroadcastRecipients(
+    broadcastId: string,
+    page: number = 1,
+    limit: number = 20,
+    statusFilter?: 'PENDING' | 'SENT' | 'FAILED',
+    searchQuery?: string
+  ): Observable<BroadcastRecipientsResponse> {
+    let params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
+    if (statusFilter) {
+      params = params.set('status', statusFilter);
+    }
+
+    if (searchQuery) {
+      params = params.set('search', searchQuery);
+    }
+
+    return this.http.get<BroadcastRecipientsResponse>(`${this.apiUrl}/${broadcastId}/recipients`, { params });
+  }
+
+  // Load initial recipients for pagination
+  loadInitialRecipients(
+    broadcastId: string,
+    limit: number = 20,
+    statusFilter?: 'PENDING' | 'SENT' | 'FAILED',
+    searchQuery?: string
+  ): Observable<BroadcastRecipientsResponse> {
+    this.loadingRecipientsSubject.next(true);
+    return this.getBroadcastRecipients(broadcastId, 1, limit, statusFilter, searchQuery);
+  }
+
+  // Load more recipients for infinite scroll
+  loadMoreRecipients(
+    broadcastId: string,
+    statusFilter?: 'PENDING' | 'SENT' | 'FAILED',
+    searchQuery?: string
+  ): Observable<BroadcastRecipientsResponse | null> {
+    const currentPagination = this.recipientsPaginationSubject.value;
+    const currentRecipients = this.recipientsSubject.value;
+    
+    if (!currentPagination || !currentPagination.hasNextPage || this.loadingRecipientsSubject.value) {
+      return new Observable(subscriber => subscriber.next(null));
+    }
+
+    this.loadingRecipientsSubject.next(true);
+    const nextPage = currentPagination.currentPage + 1;
+    const limit = currentPagination.limit || 20;
+    
+    return this.getBroadcastRecipients(broadcastId, nextPage, limit, statusFilter, searchQuery);
+  }
+
+  // Update recipients from response
+  updateRecipientsFromResponse(response: BroadcastRecipientsResponse, append = false): void {
+    this.loadingRecipientsSubject.next(false);
+    
+    if (append) {
+      // For infinite scroll - append new recipients to existing ones
+      const currentRecipients = this.recipientsSubject.value;
+      const newRecipients = [...currentRecipients, ...response.recipients];
+      this.recipientsSubject.next(newRecipients);
+    } else {
+      // For initial load or filter change - replace all recipients
+      this.recipientsSubject.next(response.recipients);
+    }
+    
+    this.recipientsPaginationSubject.next(response.pagination);
+  }
+
+  // Reset recipients
+  resetRecipients(): void {
+    this.recipientsSubject.next([]);
+    this.recipientsPaginationSubject.next(null);
+    this.loadingRecipientsSubject.next(false);
+  }
+
+  // Getters for recipients state
+  getCurrentRecipients(): BroadcastRecipient[] {
+    return this.recipientsSubject.value;
+  }
+
+  getRecipientsPaginationInfo(): PaginationInfo | null {
+    return this.recipientsPaginationSubject.value;
+  }
+
+  isLoadingRecipients(): boolean {
+    return this.loadingRecipientsSubject.value;
+  }
+
+  hasMoreRecipients(): boolean {
+    const pagination = this.recipientsPaginationSubject.value;
+    return pagination ? pagination.hasNextPage : false;
+  }
+
+  setLoadingRecipients(loading: boolean): void {
+    this.loadingRecipientsSubject.next(loading);
   }
 }

@@ -1,3 +1,9 @@
+/* Content Panels Container */
+[slot="content-panels"] {
+  display: flex;
+  flex-direction: row;
+}
+
 /* New Broadcast Form */
 .new-broadcast-form {
   background: #232e3c;
@@ -181,8 +187,10 @@
   display: flex;
   flex-direction: column;
   background: #17212b;
+  height: 100vh;
   overflow: hidden;
-  position: relative;
+  min-width: 0;
+  width: 100%;
 }
 
 /* Welcome Screen */
@@ -643,9 +651,8 @@
   flex-direction: column;
   background: #17212b;
   overflow: hidden;
-  max-width: 800px;
-  margin: 0 auto;
   width: 100%;
+  min-width: 0;
 }
 
 .composer-header {
@@ -1340,11 +1347,11 @@
 
 /* Improved Broadcast Details Container */
 .broadcast-details-container {
+  flex: 1;
   padding: 24px;
   overflow-y: auto;
-  max-width: 900px;
-  margin: 0 auto;
   width: 100%;
+  min-width: 0;
   
   /* Ensure consistent scrollbar styling */
   scrollbar-width: thin;
@@ -1484,6 +1491,158 @@
   to { transform: rotate(360deg); }
 }
 
+/* Recipients Header and Filters */
+.recipients-header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: #1a2332;
+  border-radius: 8px;
+  border: 1px solid #2b374a;
+}
+
+.recipients-filters {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+}
+
+.filter-group label {
+  color: #8696a8;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filter-group select {
+  background: #17212b;
+  border: 1px solid #2b374a;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 14px;
+  padding: 10px 12px;
+  min-width: 180px;
+  box-sizing: border-box;
+}
+
+.filter-group select:focus {
+  outline: none;
+  border-color: #5288c1;
+}
+
+.filter-group select option {
+  background: #17212b;
+  color: #ffffff;
+  padding: 8px 12px;
+}
+
+/* Recipients Pagination Info */
+.recipients-pagination-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #1a252f;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-top: 16px;
+  border: 1px solid #2b374a;
+}
+
+.recipients-pagination-info .pagination-count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #8696a8;
+}
+
+.recipients-pagination-info .pagination-count i {
+  color: #5288c1;
+}
+
+.recipients-pagination-info .pagination-more {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #6c7b8a;
+  font-style: italic;
+}
+
+.recipients-pagination-info .pagination-more i {
+  color: #5288c1;
+  animation: bounce 1.5s infinite;
+}
+
+/* No Recipients State */
+.no-recipients {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: #8696a8;
+  gap: 12px;
+  background: #1a2332;
+  border-radius: 8px;
+  border: 1px solid #2b374a;
+}
+
+.no-recipients i {
+  font-size: 48px;
+  opacity: 0.7;
+  color: #6c7b8a;
+}
+
+.no-recipients p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Recipients List Enhancement */
+.recipients-section .recipients-list {
+  min-height: 300px; /* Minimum height for consistent layout */
+  max-height: 600px; /* Add max height for scrolling */
+  overflow-y: auto; /* Allow scrolling within fixed height */
+  padding-right: 4px; /* Add padding for scrollbar */
+}
+
+/* Recipients Loading State */
+.recipients-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: #8696a8;
+  font-size: 14px;
+}
+
+.recipients-loading i {
+  color: #5288c1;
+  font-size: 16px;
+}
+
+/* Recipients Pagination */
+.recipients-pagination {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+  border-top: 1px solid #2b374a;
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .stats-grid {
@@ -1512,8 +1671,8 @@
   }
 
   .broadcast-composer {
-    max-width: 100%;
-    margin: 0;
+    width: 100%;
+    min-width: 0;
   }
 
   .file-display {
@@ -1575,5 +1734,44 @@
 
   .type-option {
     padding: 12px;
+  }
+
+  /* Mobile Recipients Filters */
+  .recipients-filters {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .filter-group {
+    min-width: auto;
+    width: 100%;
+  }
+
+  .filter-group select {
+    min-width: auto;
+    width: 100%;
+  }
+
+  .recipients-header {
+    padding: 12px;
+  }
+
+  .recipients-pagination-info {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .recipients-pagination-info .pagination-more {
+    align-self: center;
+  }
+
+  .recipients-section .recipients-list {
+    min-height: 200px; /* Reduce minimum height on mobile */
+    max-height: 400px; /* Reduce max height on mobile */
+  }
+
+  .recipients-pagination {
+    padding: 12px 0;
   }
 }

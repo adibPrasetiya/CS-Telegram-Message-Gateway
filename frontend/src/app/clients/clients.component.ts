@@ -32,7 +32,6 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
     ListItemComponent,
     SearchInputComponent,
     AvatarCircleComponent,
-    PaginationComponent,
     ToastComponent
   ],
   template: `
