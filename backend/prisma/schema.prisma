@@ -169,3 +169,29 @@ enum BroadcastRecipientStatus {
   SENT
   FAILED
 }
+
+model BotConfig {
+  id                   String   @id @default(cuid())
+  botToken             String?  @map("bot_token")
+  isConnected          Boolean  @default(false) @map("is_connected")
+  botUsername          String?  @map("bot_username")
+  botFirstName         String?  @map("bot_first_name")
+  groupId              String?  @map("group_id")
+  groupTitle           String?  @map("group_title")
+  groupType            String?  @map("group_type")
+  isGroupConfigured    Boolean  @default(false) @map("is_group_configured")
+  notificationsEnabled Boolean  @default(false) @map("notifications_enabled")
+  
+  // Notification settings
+  notifyNewClientMessage      Boolean @default(true) @map("notify_new_client_message")
+  notifyCsMessageHandling     Boolean @default(true) @map("notify_cs_message_handling")
+  notifySessionEnded          Boolean @default(true) @map("notify_session_ended")
+  notifySessionStarted        Boolean @default(true) @map("notify_session_started")
+  notifyClientConnected       Boolean @default(true) @map("notify_client_connected")
+  notifyClientDisconnected    Boolean @default(true) @map("notify_client_disconnected")
+  
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("bot_configs")
+}
