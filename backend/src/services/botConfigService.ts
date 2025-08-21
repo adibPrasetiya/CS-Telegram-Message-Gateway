@@ -90,33 +90,97 @@ export class BotConfigService {
 
   async testBotConnection(botToken: string): Promise<BotConnectionTest> {
     try {
-      // Test the bot token by making a request to Telegram Bot API
-      const response = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
-      const data: any = await response.json();
-
-      if (data.ok) {
-        return {
-          success: true,
-          botInfo: {
-            id: data.result.id,
-            username: data.result.username,
-            firstName: data.result.first_name,
-            canJoinGroups: data.result.can_join_groups,
-            canReadAllGroupMessages: data.result.can_read_all_group_messages,
-            supportsInlineQueries: data.result.supports_inline_queries,
-          }
-        };
-      } else {
+      // Validate bot token format first
+      if (!botToken || !botToken.includes(':') || botToken.length < 20) {
         return {
           success: false,
-          error: data.description || 'Invalid bot token'
+          error: 'Invalid bot token format. Token should be in format: 123456789:ABCdefGHijKLmnOPqrSTUvwxYZ'
         };
       }
-    } catch (error) {
+
+      // Test the bot token by making a request to Telegram Bot API with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      try {
+        const response = await fetch(`https://api.telegram.org/bot${botToken}/getMe`, {
+          method: 'GET',
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'TelegramHelpDesk/1.0'
+          }
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorData: any = await response.json().catch(() => ({}));
+          return {
+            success: false,
+            error: errorData.description || `HTTP ${response.status}: ${response.statusText}`
+          };
+        }
+
+        const data: any = await response.json();
+
+        if (data.ok && data.result) {
+          return {
+            success: true,
+            botInfo: {
+              id: data.result.id,
+              username: data.result.username,
+              firstName: data.result.first_name,
+              canJoinGroups: data.result.can_join_groups,
+              canReadAllGroupMessages: data.result.can_read_all_group_messages,
+              supportsInlineQueries: data.result.supports_inline_queries,
+            }
+          };
+        } else {
+          return {
+            success: false,
+            error: data.description || 'Invalid bot token'
+          };
+        }
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          return {
+            success: false,
+            error: 'Connection timeout. Please check your internet connection and try again.'
+          };
+        }
+        
+        throw fetchError;
+      }
+    } catch (error: any) {
       console.error('Bot connection test error:', error);
+      
+      // Handle specific error types
+      if (error.code === 'ENOTFOUND') {
+        return {
+          success: false,
+          error: 'Cannot reach Telegram servers. Please check your internet connection.'
+        };
+      }
+      
+      if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+        return {
+          success: false,
+          error: 'Connection timeout. Please try again in a moment.'
+        };
+      }
+
+      if (error.name === 'TypeError' && error.message.includes('fetch failed')) {
+        return {
+          success: false,
+          error: 'Network error. Please check your internet connection and try again.'
+        };
+      }
+      
       return {
         success: false,
-        error: 'Failed to connect to Telegram API'
+        error: 'Failed to connect to Telegram API. Please try again later.'
       };
     }
   }
@@ -300,36 +364,88 @@ export class BotConfigService {
       // Send test message to the configured group
       const message = '🤖 Test notification from Help Desk Bot\n\nThis is a test message to verify that notifications are working correctly.';
       
-      const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          chat_id: config.groupId,
-          text: message,
-          parse_mode: 'HTML'
-        })
-      });
+      // Add timeout to the request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-      const data: any = await response.json();
+      try {
+        const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'TelegramHelpDesk/1.0'
+          },
+          body: JSON.stringify({
+            chat_id: config.groupId,
+            text: message,
+            parse_mode: 'HTML'
+          })
+        });
 
-      if (data.ok) {
-        return {
-          success: true,
-          message: 'Test notification sent successfully'
-        };
-      } else {
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorData: any = await response.json().catch(() => ({}));
+          return {
+            success: false,
+            message: errorData.description || `HTTP ${response.status}: ${response.statusText}`
+          };
+        }
+
+        const data: any = await response.json();
+
+        if (data.ok) {
+          return {
+            success: true,
+            message: 'Test notification sent successfully'
+          };
+        } else {
+          return {
+            success: false,
+            message: data.description || 'Failed to send test notification'
+          };
+        }
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          return {
+            success: false,
+            message: 'Connection timeout. Please check your internet connection and try again.'
+          };
+        }
+        
+        throw fetchError;
+      }
+    } catch (error: any) {
+      console.error('Test notification error:', error);
+      
+      // Handle specific error types
+      if (error.code === 'ENOTFOUND') {
         return {
           success: false,
-          message: data.description || 'Failed to send test notification'
+          message: 'Cannot reach Telegram servers. Please check your internet connection.'
         };
       }
-    } catch (error) {
-      console.error('Test notification error:', error);
+      
+      if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+        return {
+          success: false,
+          message: 'Connection timeout. Please try again in a moment.'
+        };
+      }
+
+      if (error.name === 'TypeError' && error.message.includes('fetch failed')) {
+        return {
+          success: false,
+          message: 'Network error. Please check your internet connection and try again.'
+        };
+      }
+      
       return {
         success: false,
-        message: 'Failed to send test notification'
+        message: 'Failed to send test notification. Please try again later.'
       };
     }
   }

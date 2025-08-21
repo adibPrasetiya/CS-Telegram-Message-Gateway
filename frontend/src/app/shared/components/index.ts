@@ -11,6 +11,7 @@ export * from './date-range-filter/date-range-filter.component';
 export * from './sidebar-container/sidebar-container.component';
 export * from './list-panel/list-panel.component';
 export * from './list-item/list-item.component';
+export * from './stepper/stepper.component';
 
 // Create a convenient array for importing all components
 import { SidebarNavigationComponent } from './sidebar-navigation/sidebar-navigation.component';
@@ -25,6 +26,7 @@ import { DateRangeFilterComponent } from './date-range-filter/date-range-filter.
 import { SidebarContainerComponent } from './sidebar-container/sidebar-container.component';
 import { ListPanelComponent } from './list-panel/list-panel.component';
 import { ListItemComponent } from './list-item/list-item.component';
+import { StepperComponent } from './stepper/stepper.component';
 
 export const SHARED_COMPONENTS = [
   SidebarNavigationComponent,
@@ -38,5 +40,6 @@ export const SHARED_COMPONENTS = [
   DateRangeFilterComponent,
   SidebarContainerComponent,
   ListPanelComponent,
-  ListItemComponent
+  ListItemComponent,
+  StepperComponent
 ] as const;

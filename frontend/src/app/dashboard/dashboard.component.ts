@@ -104,7 +104,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.updateNavigationItems();
       });
 
-    this.socketService.connect();
+    // Socket connection is now handled at app level
   }
 
   ngOnDestroy(): void {
