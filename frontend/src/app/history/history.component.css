@@ -1,7 +1,9 @@
-/* Content Panels Container */
-[slot="content-panels"] {
+/* History Container */
+.history-container {
   display: flex;
   flex-direction: row;
+  height: 100vh;
+  background: #0e1621;
 }
 
 /* Filters Container */

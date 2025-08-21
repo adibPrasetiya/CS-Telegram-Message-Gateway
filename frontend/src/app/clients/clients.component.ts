@@ -4,19 +4,17 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { ClientService, ClientListItem, ClientDetails } from '../shared/services/client.service';
+import { ClientService, ClientListItem, ClientDetails, SessionHistoryItem, SessionHistoryResponse } from '../shared/services/client.service';
 import { AuthService } from '../shared/services/auth.service';
 import { User } from '../shared/models';
 import { 
-  SidebarContainerComponent,
-  SidebarNavigationComponent,
   ListPanelComponent,
   ListItemComponent,
   SearchInputComponent,
   AvatarCircleComponent,
-  ToastComponent
+  ToastComponent,
+  PaginationComponent
 } from '../shared/components';
-import { NavigationItem } from '../shared/components/sidebar-navigation/sidebar-navigation.component';
 import { ListPanelConfig } from '../shared/components/list-panel/list-panel.component';
 import { ListItemData } from '../shared/components/list-item/list-item.component';
 
@@ -26,93 +24,71 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
   imports: [
     CommonModule, 
     FormsModule,
-    SidebarContainerComponent,
-    SidebarNavigationComponent,
     ListPanelComponent,
     ListItemComponent,
     SearchInputComponent,
     AvatarCircleComponent,
-    ToastComponent
+    ToastComponent,
+    PaginationComponent
   ],
   template: `
-    <app-sidebar-container
-      [collapsed]="sidebarCollapsed"
-      [isMobile]="isMobile"
-      [showMobileMenu]="showMobileMenu"
-      [showMobileContent]="showMobileContent"
-      (toggleSidebar)="toggleSidebar()"
-      (toggleMobileMenu)="toggleMobileMenu()">
-      
-      <!-- Navigation Sidebar -->
-      <app-sidebar-navigation slot="navigation"
-        [currentUser]="currentUser"
-        [navigationItems]="navigationItems"
-        [collapsed]="sidebarCollapsed"
+    <div class="clients-container">
+      <!-- Client List Panel -->
+      <app-list-panel
+        [config]="clientListConfig"
+        [loading]="loading"
+        [showEmptyState]="!loading && clients.length === 0"
+        [titleIcon]="'fa-users'"
         [isMobile]="isMobile"
-        [showMobileMenu]="showMobileMenu"
-        (itemClick)="onNavigationItemClick($event)"
-        (logout)="logout()">
-      </app-sidebar-navigation>
-
-      <!-- Content Panels -->
-      <div slot="content-panels">
-        <!-- Client List Panel -->
-        <app-list-panel
-          [config]="clientListConfig"
-          [loading]="loading"
-          [showEmptyState]="!loading && clients.length === 0"
-          [titleIcon]="'fa-users'"
-          [isMobile]="isMobile"
-          [mobileHidden]="showMobileContent && isMobile"
-          [hasFooterContent]="true">
+        [mobileHidden]="false"
+        [hasFooterContent]="true">
+        
+        <!-- Search Input -->
+        <app-search-input slot="search"
+          [(ngModel)]="searchQuery"
+          (search)="onSearchChange()"
+          placeholder="Search clients..."
+          [loading]="loading">
+        </app-search-input>
+        
+        <!-- Client List Items -->
+        <div slot="list-items" class="clients-scroll-container" #clientsContainer>
+          <app-list-item
+            *ngFor="let client of clients; trackBy: trackByClientId"
+            [data]="getListItemData(client)"
+            (itemClick)="selectClient(client)">
+          </app-list-item>
           
-          <!-- Search Input -->
-          <app-search-input slot="search"
-            [(ngModel)]="searchQuery"
-            (search)="onSearchChange()"
-            placeholder="Search clients..."
-            [loading]="loading">
-          </app-search-input>
-          
-          <!-- Client List Items -->
-          <div slot="list-items" class="clients-scroll-container" #clientsContainer>
-            <app-list-item
-              *ngFor="let client of clients; trackBy: trackByClientId"
-              [data]="getListItemData(client)"
-              (itemClick)="selectClient(client)">
-            </app-list-item>
-            
-            <!-- Loading indicator for infinite scroll -->
-            <div *ngIf="clientService.isLoadingClients() && clients.length > 0" class="loading-more-indicator">
-              <i class="fas fa-spinner fa-spin"></i>
-              <span>Loading more clients...</span>
-            </div>
-            
-            <!-- End of list indicator -->
-            <div *ngIf="!clientService.hasMoreClients() && clients.length > 0" class="end-of-list-indicator">
-              <i class="fas fa-check-circle"></i>
-              <span>All clients loaded</span>
-            </div>
+          <!-- Loading indicator for infinite scroll -->
+          <div *ngIf="clientService.isLoadingClients() && clients.length > 0" class="loading-more-indicator">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading more clients...</span>
           </div>
           
-          <!-- Pagination Info Footer (showing current count) -->
-          <div slot="footer" *ngIf="pagination">
-            <div class="pagination-info">
-              <span class="pagination-count">
-                <i class="fas fa-users"></i>
-                Showing {{ clients.length }} of {{ pagination.totalCount }} clients
-              </span>
-              <span *ngIf="clientService.hasMoreClients()" class="pagination-more">
-                <i class="fas fa-chevron-down"></i>
-                Scroll for more
-              </span>
-            </div>
+          <!-- End of list indicator -->
+          <div *ngIf="!clientService.hasMoreClients() && clients.length > 0" class="end-of-list-indicator">
+            <i class="fas fa-check-circle"></i>
+            <span>All clients loaded</span>
           </div>
-        </app-list-panel>
-      </div>
+        </div>
+        
+        <!-- Pagination Info Footer (showing current count) -->
+        <div slot="footer" *ngIf="pagination">
+          <div class="pagination-info">
+            <span class="pagination-count">
+              <i class="fas fa-users"></i>
+              Showing {{ clients.length }} of {{ pagination.totalCount }} clients
+            </span>
+            <span *ngIf="clientService.hasMoreClients()" class="pagination-more">
+              <i class="fas fa-chevron-down"></i>
+              Scroll for more
+            </span>
+          </div>
+        </div>
+      </app-list-panel>
 
       <!-- Client Details Panel (Right Side) -->
-      <div slot="main-content" class="client-details-panel">
+      <div class="client-details-panel">
         <!-- Welcome Screen -->
         <div *ngIf="!selectedClient" class="welcome-screen">
           <div class="welcome-content">
@@ -166,9 +142,9 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
           </div>
 
           <!-- Client Statistics -->
-          <div class="client-stats">
+          <div class="client-stats" *ngIf="!loadingClientDetails && clientDetails">
             <div class="stat-card">
-              <div class="stat-value">{{ selectedClient.totalSessions }}</div>
+              <div class="stat-value">{{ clientDetails._count?.sessions || selectedClient.totalSessions }}</div>
               <div class="stat-label">Total Sessions</div>
             </div>
             <div class="stat-card">
@@ -181,17 +157,32 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
             </div>
           </div>
 
+          <!-- Loading indicator for client details -->
+          <div *ngIf="loadingClientDetails" class="loading-indicator">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading client details...</span>
+          </div>
+
           <!-- Session History -->
-          <div class="session-history" *ngIf="clientDetails">
-            <h4>Session History</h4>
-            <div class="sessions-list">
-              <div *ngIf="clientDetails.sessions.length === 0" class="no-sessions">
+          <div class="session-history" *ngIf="selectedClient">
+            <h4>Session History 
+              <span *ngIf="sessionHistoryPagination">({{ sessionHistoryPagination.totalCount }})</span>
+            </h4>
+            
+            <!-- Loading indicator -->
+            <div *ngIf="loadingSessionHistory" class="loading-indicator">
+              <i class="fas fa-spinner fa-spin"></i>
+              <span>Loading sessions...</span>
+            </div>
+
+            <div class="sessions-list" *ngIf="!loadingSessionHistory">
+              <div *ngIf="sessionHistory.length === 0" class="no-sessions">
                 <i class="fas fa-comment-slash"></i>
                 <p>No sessions found</p>
               </div>
 
               <div 
-                *ngFor="let session of clientDetails.sessions" 
+                *ngFor="let session of sessionHistory" 
                 class="session-item"
                 [class.active]="session.status === 'ACTIVE'"
               >
@@ -226,11 +217,19 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
                 </button>
               </div>
             </div>
+
+            <!-- Session History Pagination -->
+            <div class="session-history-pagination" *ngIf="sessionHistoryPagination && sessionHistoryPagination.totalPages > 1">
+              <app-pagination
+                [pagination]="sessionHistoryPagination"
+                [showPageNumbers]="true"
+                [showFirstLast]="true"
+                (pageChange)="goToSessionPage($event)">
+              </app-pagination>
+            </div>
           </div>
         </div>
       </div>
-
-    </app-sidebar-container>
 
     <!-- Success/Error Messages -->
     <app-toast
@@ -261,6 +260,14 @@ export class ClientsComponent implements OnInit, OnDestroy, AfterViewInit {
   // Selected client
   selectedClient: ClientListItem | null = null;
   clientDetails: ClientDetails | null = null;
+  loadingClientDetails = false;
+
+  // Session history pagination
+  sessionHistory: SessionHistoryItem[] = [];
+  sessionHistoryPagination: any = null;
+  loadingSessionHistory = false;
+  sessionsPerPage = 10;
+  currentSessionPage = 1;
 
   // UI state
   isStartingConversation = false;
@@ -271,33 +278,6 @@ export class ClientsComponent implements OnInit, OnDestroy, AfterViewInit {
   showMobileMenu = false;
   showMobileContent = false;
 
-  // Navigation configuration
-  navigationItems: NavigationItem[] = [
-    {
-      id: 'dashboard',
-      icon: 'fa-comments',
-      label: 'Chats',
-      isActive: false
-    },
-    {
-      id: 'clients',
-      icon: 'fa-users',
-      label: 'Clients',
-      isActive: true
-    },
-    {
-      id: 'history',
-      icon: 'fa-history',
-      label: 'History',
-      isActive: false
-    },
-    {
-      id: 'broadcast',
-      icon: 'fa-bullhorn',
-      label: 'Broadcast',
-      isActive: false
-    }
-  ];
 
   // List panel configuration
   clientListConfig: ListPanelConfig = {
@@ -404,22 +384,134 @@ export class ClientsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   selectClient(client: ClientListItem): void {
+    // Immediately clear previous data to prevent showing stale information
+    this.clearSelectedClientData();
+    
+    // Set the selected client
     this.selectedClient = client;
+    
+    // Load new data
     this.loadClientDetails(client.id);
+    this.loadSessionHistory(client.id, 1);
+  }
+
+  private clearSelectedClientData(): void {
+    this.clientDetails = null;
+    this.sessionHistory = [];
+    this.sessionHistoryPagination = null;
+    this.currentSessionPage = 1;
+    this.loadingClientDetails = false;
+    this.loadingSessionHistory = false;
   }
 
   loadClientDetails(clientId: string): void {
+    this.loadingClientDetails = true;
+    
     this.clientService.getClientDetails(clientId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (details) => {
-          this.clientDetails = details;
+          // Only update if this is still the selected client (prevent race conditions)
+          if (this.selectedClient && this.selectedClient.id === clientId) {
+            this.clientDetails = details;
+          }
+          this.loadingClientDetails = false;
         },
         error: (error) => {
           console.error('Error loading client details:', error);
           this.showToast('Error loading client details', 'error');
+          this.loadingClientDetails = false;
         }
       });
+  }
+
+  loadSessionHistory(clientId: string, page: number = 1): void {
+    this.loadingSessionHistory = true;
+    this.currentSessionPage = page;
+
+    // Try the new paginated API first, fallback to client details if it fails
+    this.clientService.getClientSessionHistory(clientId, page, this.sessionsPerPage)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          // Only update if this is still the selected client (prevent race conditions)
+          if (this.selectedClient && this.selectedClient.id === clientId) {
+            this.sessionHistory = response.sessions;
+            this.sessionHistoryPagination = response.pagination;
+          }
+          this.loadingSessionHistory = false;
+        },
+        error: (error) => {
+          console.warn('Paginated session history API not available, using fallback:', error);
+          // Fallback: use client details and implement client-side pagination
+          this.loadSessionHistoryFallback(clientId, page);
+        }
+      });
+  }
+
+  private loadSessionHistoryFallback(clientId: string, page: number): void {
+    if (!this.clientDetails) {
+      // Load client details first if not available
+      this.clientService.getClientDetails(clientId)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (details) => {
+            // Only update if this is still the selected client
+            if (this.selectedClient && this.selectedClient.id === clientId) {
+              this.clientDetails = details;
+              this.paginateSessionsFromClientDetails(page, clientId);
+            } else {
+              this.loadingSessionHistory = false;
+            }
+          },
+          error: (error) => {
+            console.error('Error loading client details for session history:', error);
+            this.showToast('Error loading session history', 'error');
+            this.loadingSessionHistory = false;
+          }
+        });
+    } else {
+      this.paginateSessionsFromClientDetails(page, clientId);
+    }
+  }
+
+  private paginateSessionsFromClientDetails(page: number, clientId: string): void {
+    // Ensure this is still the selected client
+    if (!this.selectedClient || this.selectedClient.id !== clientId) {
+      this.loadingSessionHistory = false;
+      return;
+    }
+
+    if (!this.clientDetails?.sessions) {
+      this.sessionHistory = [];
+      this.sessionHistoryPagination = null;
+      this.loadingSessionHistory = false;
+      return;
+    }
+
+    const allSessions = this.clientDetails.sessions;
+    const totalCount = allSessions.length;
+    const totalPages = Math.ceil(totalCount / this.sessionsPerPage);
+    const startIndex = (page - 1) * this.sessionsPerPage;
+    const endIndex = startIndex + this.sessionsPerPage;
+    const paginatedSessions = allSessions.slice(startIndex, endIndex);
+
+    this.sessionHistory = paginatedSessions;
+    this.sessionHistoryPagination = {
+      currentPage: page,
+      totalPages: totalPages,
+      totalCount: totalCount,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1
+    };
+    
+    this.loadingSessionHistory = false;
+    console.log('Using fallback session history pagination:', paginatedSessions.length, 'of', totalCount, 'sessions on page', page);
+  }
+
+  goToSessionPage(page: number): void {
+    if (!this.selectedClient || page === this.currentSessionPage) return;
+    this.loadSessionHistory(this.selectedClient.id, page);
   }
 
   startConversation(): void {
@@ -455,7 +547,7 @@ export class ClientsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   viewSession(sessionId: string): void {
-    this.router.navigate(['/history'], { 
+    this.router.navigate(['/dashboard/history'], { 
       queryParams: { sessionId: sessionId } 
     });
   }
@@ -507,28 +599,6 @@ export class ClientsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   // Navigation methods
-  onNavigationItemClick(item: NavigationItem): void {
-    // Update active state
-    this.navigationItems.forEach(navItem => {
-      navItem.isActive = navItem.id === item.id;
-    });
-
-    // Navigate based on item
-    switch (item.id) {
-      case 'dashboard':
-        this.router.navigate(['/dashboard']);
-        break;
-      case 'history':
-        this.router.navigate(['/history']);
-        break;
-      case 'broadcast':
-        this.router.navigate(['/broadcast']);
-        break;
-      case 'clients':
-        // Already on clients page
-        break;
-    }
-  }
 
   logout(): void {
     this.authService.logout();

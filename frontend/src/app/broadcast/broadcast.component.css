@@ -1,7 +1,9 @@
-/* Content Panels Container */
-[slot="content-panels"] {
+/* Broadcast Container */
+.broadcast-container {
   display: flex;
   flex-direction: row;
+  height: 100vh;
+  background: #0e1621;
 }
 
 /* New Broadcast Form */
@@ -188,9 +190,8 @@
   flex-direction: column;
   background: #17212b;
   height: 100vh;
-  overflow: hidden;
+  overflow-y: auto;
   min-width: 0;
-  width: 100%;
 }
 
 /* Welcome Screen */

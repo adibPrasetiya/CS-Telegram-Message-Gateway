@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { Router } from "@angular/router";
+import { Router, ActivatedRoute } from "@angular/router";
 import { Subject } from "rxjs";
 import { takeUntil, debounceTime, distinctUntilChanged } from "rxjs/operators";
 import {
@@ -14,15 +14,12 @@ import {
 import { AuthService } from "../shared/services/auth.service";
 import { User } from "../shared/models";
 import { 
-  SidebarContainerComponent, 
-  SidebarNavigationComponent, 
   ListPanelComponent, 
   ListItemComponent,
   SearchInputComponent,
   DropdownComponent, 
   DateRangeFilterComponent
 } from "../shared/components";
-import { NavigationItem } from '../shared/components/sidebar-navigation/sidebar-navigation.component';
 import { ListPanelConfig } from '../shared/components/list-panel/list-panel.component';
 import { ListItemData } from '../shared/components/list-item/list-item.component';
 import { DropdownOption, DateRange } from "../shared/components";
@@ -33,8 +30,6 @@ import { DropdownOption, DateRange } from "../shared/components";
   imports: [
     CommonModule, 
     FormsModule, 
-    SidebarContainerComponent,
-    SidebarNavigationComponent,
     ListPanelComponent,
     ListItemComponent,
     SearchInputComponent,
@@ -42,110 +37,89 @@ import { DropdownOption, DateRange } from "../shared/components";
     DateRangeFilterComponent
   ],
   template: `
-    <app-sidebar-container
-      [collapsed]="sidebarCollapsed"
-      [isMobile]="isMobile"
-      [showMobileMenu]="showMobileMenu"
-      [showMobileContent]="showMobileChat"
-      (toggleSidebar)="toggleSidebar()"
-      (toggleMobileMenu)="toggleMobileMenu()">
-      
-      <!-- Navigation Sidebar -->
-      <app-sidebar-navigation slot="navigation"
-        [currentUser]="currentUser"
-        [navigationItems]="navigationItems"
-        [collapsed]="sidebarCollapsed"
+    <div class="history-container">
+      <!-- Session History List Panel -->
+      <app-list-panel
+        [config]="historyListConfig"
+        [loading]="loading"
+        [showEmptyState]="!loading && sessions.length === 0"
+        [titleIcon]="'fa-history'"
         [isMobile]="isMobile"
-        [showMobileMenu]="showMobileMenu"
-        (itemClick)="onNavigationItemClick($event)"
-        (logout)="logout()">
-      </app-sidebar-navigation>
+        [mobileHidden]="showMobileChat && isMobile">
+        
+        <!-- Search Input -->
+        <app-search-input slot="search"
+          [(ngModel)]="filters.clientName"
+          (search)="onClientNameChange()"
+          placeholder="Search sessions..."
+          [loading]="false">
+        </app-search-input>
+        
+        <!-- Filters -->
+        <div slot="filters" class="filters-container">
+          <div class="filter-row">
+            <app-dropdown
+              [options]="statusFilterOptions"
+              [selectedValue]="filters.status"
+              placeholder="All Status"
+              triggerIcon="fa-filter"
+              (selectionChange)="onStatusFilterChange($event)">
+            </app-dropdown>
 
-      <!-- Content Panels -->
-      <div slot="content-panels">
-        <!-- Session History List Panel -->
-        <app-list-panel
-          [config]="historyListConfig"
-          [loading]="loading"
-          [showEmptyState]="!loading && sessions.length === 0"
-          [titleIcon]="'fa-history'"
-          [isMobile]="isMobile"
-          [mobileHidden]="showMobileChat && isMobile">
-          
-          <!-- Search Input -->
-          <app-search-input slot="search"
-            [(ngModel)]="filters.clientName"
-            (search)="onClientNameChange()"
-            placeholder="Search sessions..."
-            [loading]="false">
-          </app-search-input>
-          
-          <!-- Filters -->
-          <div slot="filters" class="filters-container">
-            <div class="filter-row">
-              <app-dropdown
-                [options]="statusFilterOptions"
-                [selectedValue]="filters.status"
-                placeholder="All Status"
-                triggerIcon="fa-filter"
-                (selectionChange)="onStatusFilterChange($event)">
-              </app-dropdown>
-
-              <div class="filter-actions">
-                <button
-                  class="btn-icon"
-                  [class.active]="showAdvancedFilters"
-                  (click)="showAdvancedFilters = !showAdvancedFilters"
-                  title="Advanced filters"
-                >
-                  <i class="fas fa-calendar-alt"></i>
-                </button>
-                <button
-                  class="btn-icon"
-                  (click)="clearFilters()"
-                  title="Clear filters"
-                >
-                  <i class="fas fa-times"></i>
-                </button>
-              </div>
-            </div>
-
-            <!-- Advanced Date Range Filter -->
-            <div class="advanced-filters" *ngIf="showAdvancedFilters">
-              <app-date-range-filter
-                [startDate]="filters.dateFrom"
-                [endDate]="filters.dateTo"
-                (dateRangeChange)="onDateRangeChange($event)"
-                (clear)="clearDateFilter()">
-              </app-date-range-filter>
+            <div class="filter-actions">
+              <button
+                class="btn-icon"
+                [class.active]="showAdvancedFilters"
+                (click)="showAdvancedFilters = !showAdvancedFilters"
+                title="Advanced filters"
+              >
+                <i class="fas fa-calendar-alt"></i>
+              </button>
+              <button
+                class="btn-icon"
+                (click)="clearFilters()"
+                title="Clear filters"
+              >
+                <i class="fas fa-times"></i>
+              </button>
             </div>
           </div>
-          
-          <!-- Session List Items -->
-          <div slot="list-items" class="sessions-scroll-container" #sessionsContainer>
-            <app-list-item
-              *ngFor="let session of sessions; trackBy: trackBySessionId"
-              [data]="getListItemData(session)"
-              (itemClick)="selectSession(session)">
-            </app-list-item>
-            
-            <!-- Loading indicator for infinite scroll -->
-            <div *ngIf="historyService.isLoadingSessions() && sessions.length > 0" class="loading-more-indicator">
-              <i class="fas fa-spinner fa-spin"></i>
-              <span>Loading more sessions...</span>
-            </div>
-            
-            <!-- End of list indicator -->
-            <div *ngIf="!historyService.hasMoreSessions() && sessions.length > 0" class="end-of-list-indicator">
-              <i class="fas fa-check-circle"></i>
-              <span>All sessions loaded</span>
-            </div>
+
+          <!-- Advanced Date Range Filter -->
+          <div class="advanced-filters" *ngIf="showAdvancedFilters">
+            <app-date-range-filter
+              [startDate]="filters.dateFrom"
+              [endDate]="filters.dateTo"
+              (dateRangeChange)="onDateRangeChange($event)"
+              (clear)="clearDateFilter()">
+            </app-date-range-filter>
           </div>
-        </app-list-panel>
-      </div>
+        </div>
+        
+        <!-- Session List Items -->
+        <div slot="list-items" class="sessions-scroll-container" #sessionsContainer>
+          <app-list-item
+            *ngFor="let session of sessions; trackBy: trackBySessionId"
+            [data]="getListItemData(session)"
+            (itemClick)="selectSession(session)">
+          </app-list-item>
+          
+          <!-- Loading indicator for infinite scroll -->
+          <div *ngIf="historyService.isLoadingSessions() && sessions.length > 0" class="loading-more-indicator">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading more sessions...</span>
+          </div>
+          
+          <!-- End of list indicator -->
+          <div *ngIf="!historyService.hasMoreSessions() && sessions.length > 0" class="end-of-list-indicator">
+            <i class="fas fa-check-circle"></i>
+            <span>All sessions loaded</span>
+          </div>
+        </div>
+      </app-list-panel>
 
       <!-- Main Content Area -->
-      <div slot="main-content" class="chat-main-area" [class.mobile-hidden]="!showMobileChat && isMobile">
+      <div class="chat-main-area" [class.mobile-hidden]="!showMobileChat && isMobile">
         <!-- Welcome Screen -->
         <div *ngIf="!selectedSession" class="welcome-screen">
           <div class="welcome-content">
@@ -416,8 +390,7 @@ import { DropdownOption, DateRange } from "../shared/components";
           </div>
         </div>
       </div>
-
-    </app-sidebar-container>
+    </div>
   `,
   styleUrls: ["./history.component.css"],
 })
@@ -457,14 +430,7 @@ export class HistoryComponent implements OnInit, OnDestroy, AfterViewInit {
   showMobileChat = false;
   sidebarCollapsed = false;
   
-  // Navigation and panel configurations
-  navigationItems: NavigationItem[] = [
-    { id: 'chats', icon: 'fa-comments', label: 'Chats' },
-    { id: 'history', icon: 'fa-history', label: 'History', isActive: true },
-    { id: 'clients', icon: 'fa-users', label: 'Clients' },
-    { id: 'broadcast', icon: 'fa-bullhorn', label: 'Broadcast' },
-    { id: 'settings', icon: 'fa-cog', label: 'Settings', isVisible: false }
-  ];
+  // Panel configurations
   
   historyListConfig: ListPanelConfig = {
     title: 'Session History',
@@ -501,7 +467,8 @@ export class HistoryComponent implements OnInit, OnDestroy, AfterViewInit {
   constructor(
     public historyService: HistoryService,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
@@ -520,7 +487,6 @@ export class HistoryComponent implements OnInit, OnDestroy, AfterViewInit {
     window.addEventListener("resize", () => this.checkMobile());
 
     this.currentUser = this.authService.getCurrentUser();
-    this.updateNavigationItems();
 
     // Setup search debouncing
     this.searchSubject
@@ -537,6 +503,15 @@ export class HistoryComponent implements OnInit, OnDestroy, AfterViewInit {
       });
 
     this.loadSessions();
+
+    // Handle sessionId query parameter
+    this.route.queryParams
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(params => {
+        if (params['sessionId']) {
+          this.loadAndSelectSession(params['sessionId']);
+        }
+      });
   }
 
   ngAfterViewInit(): void {
@@ -556,28 +531,6 @@ export class HistoryComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  private updateNavigationItems(): void {
-    // Update navigation items based on user role
-    this.navigationItems = [
-      { id: 'chats', icon: 'fa-comments', label: 'Chats' },
-      { id: 'history', icon: 'fa-history', label: 'History', isActive: true },
-      { id: 'clients', icon: 'fa-users', label: 'Clients' },
-      { id: 'broadcast', icon: 'fa-bullhorn', label: 'Broadcast' },
-      { id: 'settings', icon: 'fa-cog', label: 'Settings', isVisible: this.currentUser?.role === 'ADMIN' }
-    ];
-  }
-  
-  onNavigationItemClick(item: NavigationItem): void {
-    if (item.id === 'chats') {
-      this.navigateToDashboard();
-    } else if (item.id === 'clients') {
-      this.navigateToClients();
-    } else if (item.id === 'broadcast') {
-      this.navigateToBroadcast();
-    } else if (item.id === 'settings') {
-      this.setActiveMenuTab('settings');
-    }
-  }
   
   getListItemData(session: SessionHistoryItem): ListItemData {
     return {
@@ -1058,5 +1011,28 @@ export class HistoryComponent implements OnInit, OnDestroy, AfterViewInit {
         this.loadMoreSessions();
       }
     }, 200);
+  }
+
+  private loadAndSelectSession(sessionId: string): void {
+    // First, check if the session is already loaded
+    const existingSession = this.sessions.find(s => s.id === sessionId);
+    if (existingSession) {
+      this.selectSession(existingSession);
+      return;
+    }
+
+    // If not loaded, we need to load the session details directly
+    this.historyService.getSessionDetails(sessionId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (sessionDetails) => {
+          // Set the selected session directly since we have the full details
+          this.selectedSession = sessionDetails;
+          this.showMobileChat = true; // Show chat view on mobile
+        },
+        error: (error) => {
+          console.error('Error loading session details:', error);
+        }
+      });
   }
 }

@@ -1,20 +1,21 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
 import { User } from '../../models';
 
 export interface NavigationItem {
   id: string;
   icon: string;
   label: string;
-  isActive?: boolean;
+  routerLink: string;
   isVisible?: boolean;
-  action?: () => void;
+  exactMatch?: boolean;
 }
 
 @Component({
   selector: 'app-sidebar-navigation',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterModule],
   template: `
     <div class="menu-sidebar" 
          [class.collapsed]="collapsed && !isMobile"
@@ -30,15 +31,17 @@ export interface NavigationItem {
       </div>
       
       <div class="menu-items">
-        <div *ngFor="let item of navigationItems; trackBy: trackByItemId" 
-             class="menu-item" 
-             [class.active]="item.isActive" 
-             (click)="onItemClick(item)"
-             [title]="collapsed ? item.label : ''"
-             [style.display]="item.isVisible === false ? 'none' : 'flex'">
+        <a *ngFor="let item of navigationItems; trackBy: trackByItemId" 
+           class="menu-item" 
+           [routerLink]="item.routerLink"
+           routerLinkActive="active"
+           [routerLinkActiveOptions]="{ exact: item.exactMatch || false }"
+           [title]="collapsed ? item.label : ''"
+           [style.display]="item.isVisible === false ? 'none' : 'flex'"
+           (click)="onItemClick(item)">
           <i [class]="'fas ' + item.icon + ' menu-icon'"></i>
           <span class="menu-label" *ngIf="!collapsed || isMobile">{{ item.label }}</span>
-        </div>
+        </a>
       </div>
 
       <div class="menu-footer">
@@ -127,9 +130,16 @@ export interface NavigationItem {
       border-radius: 8px;
       cursor: pointer;
       transition: all 0.2s;
-      color: #8696a8;
+      color: #b8c5d1;
       gap: 12px;
       white-space: nowrap;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    a.menu-item {
+      color: #b8c5d1;
+      text-decoration: none;
     }
 
     .menu-sidebar.collapsed .menu-item {
@@ -139,11 +149,13 @@ export interface NavigationItem {
 
     .menu-item:hover {
       background: #2b374a;
+      color: #ffffff;
     }
 
     .menu-item.active {
       background: #5288c1;
-      color: white;
+      color: #ffffff;
+      font-weight: 600;
     }
 
     .menu-icon {
@@ -217,9 +229,6 @@ export class SidebarNavigationComponent {
   @Output() logout = new EventEmitter<void>();
 
   onItemClick(item: NavigationItem): void {
-    if (item.action) {
-      item.action();
-    }
     this.itemClick.emit(item);
   }
 

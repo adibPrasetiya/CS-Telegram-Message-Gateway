@@ -70,6 +70,26 @@ export interface ClientDetails {
   };
 }
 
+export interface SessionHistoryItem {
+  id: string;
+  status: 'ACTIVE' | 'ENDED';
+  createdAt: string;
+  endedAt?: string;
+  cs?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  _count: {
+    chats: number;
+  };
+}
+
+export interface SessionHistoryResponse {
+  sessions: SessionHistoryItem[];
+  pagination: PaginationInfo;
+}
+
 export interface StartConversationResponse {
   message: string;
   session: {
@@ -124,6 +144,14 @@ export class ClientService {
 
   getClientDetails(clientId: string): Observable<ClientDetails> {
     return this.http.get<ClientDetails>(`${this.apiUrl}/${clientId}`);
+  }
+
+  getClientSessionHistory(clientId: string, page: number = 1, limit: number = 10): Observable<SessionHistoryResponse> {
+    let params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
+    return this.http.get<SessionHistoryResponse>(`${this.apiUrl}/${clientId}/sessions`, { params });
   }
 
   startConversation(clientId: string): Observable<StartConversationResponse> {

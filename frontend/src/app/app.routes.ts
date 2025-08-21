@@ -18,22 +18,34 @@ export const routes: Routes = [
   {
     path: 'dashboard',
     loadComponent: () => import('./dashboard/dashboard.component').then(m => m.DashboardComponent),
-    canActivate: [AuthGuard]
-  },
-  {
-    path: 'history',
-    loadComponent: () => import('./history/history.component').then(m => m.HistoryComponent),
-    canActivate: [AuthGuard]
-  },
-  {
-    path: 'clients',
-    loadComponent: () => import('./clients/clients.component').then(m => m.ClientsComponent),
-    canActivate: [AuthGuard]
-  },
-  {
-    path: 'broadcast',
-    loadComponent: () => import('./broadcast/broadcast.component').then(m => m.BroadcastComponent),
-    canActivate: [AuthGuard]
+    canActivate: [AuthGuard],
+    children: [
+      {
+        path: '',
+        redirectTo: 'chats',
+        pathMatch: 'full'
+      },
+      {
+        path: 'chats',
+        loadComponent: () => import('./chat/chat.component').then(m => m.ChatComponent)
+      },
+      {
+        path: 'history',
+        loadComponent: () => import('./history/history.component').then(m => m.HistoryComponent)
+      },
+      {
+        path: 'clients',
+        loadComponent: () => import('./clients/clients.component').then(m => m.ClientsComponent)
+      },
+      {
+        path: 'broadcast',
+        loadComponent: () => import('./broadcast/broadcast.component').then(m => m.BroadcastComponent)
+      },
+      {
+        path: 'settings',
+        loadComponent: () => import('./settings/settings.component').then(m => m.SettingsComponent)
+      }
+    ]
   },
   {
     path: '**',

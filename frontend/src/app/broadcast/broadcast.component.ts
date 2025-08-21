@@ -7,14 +7,11 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BroadcastService, BroadcastRequest, BroadcastHistoryItem, BroadcastDetails, BroadcastRecipient } from '../shared/services/broadcast.service';
 import { AuthService } from '../shared/services/auth.service';
 import { User } from '../shared/models';
-import { SidebarContainerComponent } from '../shared/components/sidebar-container/sidebar-container.component';
-import { SidebarNavigationComponent } from '../shared/components/sidebar-navigation/sidebar-navigation.component';
 import { ListPanelComponent } from '../shared/components/list-panel/list-panel.component';
 import { ListItemComponent } from '../shared/components/list-item/list-item.component';
 import { PaginationComponent } from '../shared/components/pagination/pagination.component';
 import { SearchInputComponent } from '../shared/components/search-input/search-input.component';
 import { ToastComponent } from '../shared/components/toast/toast.component';
-import { NavigationItem } from '../shared/components/sidebar-navigation/sidebar-navigation.component';
 import { ListPanelConfig } from '../shared/components/list-panel/list-panel.component';
 import { ListItemData } from '../shared/components/list-item/list-item.component';
 
@@ -24,8 +21,6 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
   imports: [
     CommonModule, 
     FormsModule,
-    SidebarContainerComponent,
-    SidebarNavigationComponent,
     ListPanelComponent,
     ListItemComponent,
     SearchInputComponent,
@@ -33,89 +28,68 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
     ToastComponent
   ],
   template: `
-    <app-sidebar-container
-      [collapsed]="sidebarCollapsed"
-      [isMobile]="isMobile"
-      [showMobileMenu]="showMobileMenu"
-      [showMobileContent]="showMobileContent"
-      (toggleSidebar)="toggleSidebar()"
-      (toggleMobileMenu)="toggleMobileMenu()">
-      
-      <!-- Navigation Sidebar -->
-      <app-sidebar-navigation slot="navigation"
-        [currentUser]="currentUser"
-        [navigationItems]="navigationItems"
-        [collapsed]="sidebarCollapsed"
+    <div class="broadcast-container">
+      <!-- Broadcast List Panel -->
+      <app-list-panel
+        [config]="broadcastListConfig"
+        [loading]="loading"
+        [showEmptyState]="!loading && broadcasts.length === 0 && !showNewBroadcastForm"
+        [titleIcon]="'fa-bullhorn'"
         [isMobile]="isMobile"
-        [showMobileMenu]="showMobileMenu"
-        (itemClick)="onNavigationItemClick($event)"
-        (logout)="logout()">
-      </app-sidebar-navigation>
-
-      <!-- Content Panels -->
-      <div slot="content-panels">
-        <!-- Broadcast List Panel -->
-        <app-list-panel
-          [config]="broadcastListConfig"
-          [loading]="loading"
-          [showEmptyState]="!loading && broadcasts.length === 0 && !showNewBroadcastForm"
-          [titleIcon]="'fa-bullhorn'"
-          [isMobile]="isMobile"
-          [mobileHidden]="showMobileContent && isMobile"
-          [hasFooterContent]="true">
+        [mobileHidden]="false"
+        [hasFooterContent]="true">
+        
+        <!-- Header Actions -->
+        <div slot="search">
+          <button 
+            class="btn-new-broadcast"
+            (click)="openNewBroadcastForm()"
+            [disabled]="isSendingBroadcast"
+            type="button"
+          >
+            <i class="fas fa-plus"></i>
+            New Broadcast
+          </button>
+        </div>
+        
+        <!-- List Items -->
+        <div slot="list-items" class="broadcasts-scroll-container" #broadcastsContainer>
+          <app-list-item
+            *ngFor="let broadcast of broadcasts; trackBy: trackByBroadcastId"
+            [data]="getListItemData(broadcast)"
+            (itemClick)="selectBroadcast(broadcast)">
+          </app-list-item>
           
-          <!-- Header Actions -->
-          <div slot="search">
-            <button 
-              class="btn-new-broadcast"
-              (click)="openNewBroadcastForm()"
-              [disabled]="isSendingBroadcast"
-              type="button"
-            >
-              <i class="fas fa-plus"></i>
-              New Broadcast
-            </button>
+          <!-- Loading indicator for infinite scroll -->
+          <div *ngIf="broadcastService.isLoadingBroadcasts() && broadcasts.length > 0" class="loading-more-indicator">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading more broadcasts...</span>
           </div>
           
-          <!-- List Items -->
-          <div slot="list-items" class="broadcasts-scroll-container" #broadcastsContainer>
-            <app-list-item
-              *ngFor="let broadcast of broadcasts; trackBy: trackByBroadcastId"
-              [data]="getListItemData(broadcast)"
-              (itemClick)="selectBroadcast(broadcast)">
-            </app-list-item>
-            
-            <!-- Loading indicator for infinite scroll -->
-            <div *ngIf="broadcastService.isLoadingBroadcasts() && broadcasts.length > 0" class="loading-more-indicator">
-              <i class="fas fa-spinner fa-spin"></i>
-              <span>Loading more broadcasts...</span>
-            </div>
-            
-            <!-- End of list indicator -->
-            <div *ngIf="!broadcastService.hasMoreBroadcasts() && broadcasts.length > 0" class="end-of-list-indicator">
-              <i class="fas fa-check-circle"></i>
-              <span>All broadcasts loaded</span>
-            </div>
+          <!-- End of list indicator -->
+          <div *ngIf="!broadcastService.hasMoreBroadcasts() && broadcasts.length > 0" class="end-of-list-indicator">
+            <i class="fas fa-check-circle"></i>
+            <span>All broadcasts loaded</span>
           </div>
-          
-          <!-- Pagination Info Footer (showing current count) -->
-          <div slot="footer" *ngIf="pagination">
-            <div class="pagination-info">
-              <span class="pagination-count">
-                <i class="fas fa-bullhorn"></i>
-                Showing {{ broadcasts.length }} of {{ pagination.totalCount }} broadcasts
-              </span>
-              <span *ngIf="broadcastService.hasMoreBroadcasts()" class="pagination-more">
-                <i class="fas fa-chevron-down"></i>
-                Scroll for more
-              </span>
-            </div>
+        </div>
+        
+        <!-- Pagination Info Footer (showing current count) -->
+        <div slot="footer" *ngIf="pagination">
+          <div class="pagination-info">
+            <span class="pagination-count">
+              <i class="fas fa-bullhorn"></i>
+              Showing {{ broadcasts.length }} of {{ pagination.totalCount }} broadcasts
+            </span>
+            <span *ngIf="broadcastService.hasMoreBroadcasts()" class="pagination-more">
+              <i class="fas fa-chevron-down"></i>
+              Scroll for more
+            </span>
           </div>
-        </app-list-panel>
-      </div>
+        </div>
+      </app-list-panel>
 
       <!-- Broadcast Details Panel (Right Side) -->
-      <div slot="main-content" class="broadcast-details-panel">
+      <div class="broadcast-details-panel">
         <!-- Create New Broadcast -->
         <div *ngIf="showNewBroadcastForm" class="broadcast-composer">
           <div class="composer-header">
@@ -509,8 +483,6 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
         </div>
       </div>
 
-    </app-sidebar-container>
-
     <!-- Success/Error Messages -->
     <app-toast
       [visible]="!!toastMessage"
@@ -594,38 +566,8 @@ export class BroadcastComponent implements OnInit, OnDestroy, AfterViewInit {
   // UI state
   toastMessage = '';
   toastType: 'success' | 'error' = 'success';
-  sidebarCollapsed = false;
   isMobile = false;
-  showMobileMenu = false;
-  showMobileContent = false;
 
-  // Navigation configuration
-  navigationItems: NavigationItem[] = [
-    {
-      id: 'dashboard',
-      icon: 'fa-comments',
-      label: 'Chats',
-      isActive: false
-    },
-    {
-      id: 'clients',
-      icon: 'fa-users',
-      label: 'Clients',
-      isActive: false
-    },
-    {
-      id: 'history',
-      icon: 'fa-history',
-      label: 'History',
-      isActive: false
-    },
-    {
-      id: 'broadcast',
-      icon: 'fa-bullhorn',
-      label: 'Broadcast',
-      isActive: true
-    }
-  ];
 
   // List panel configuration
   broadcastListConfig: ListPanelConfig = {
@@ -735,7 +677,6 @@ export class BroadcastComponent implements OnInit, OnDestroy, AfterViewInit {
   selectBroadcast(broadcast: BroadcastHistoryItem): void {
     this.selectedBroadcast = broadcast;
     this.showNewBroadcastForm = false; // Hide composer if open
-    this.showMobileContent = true; // Show details on mobile
     this.loadBroadcastDetails(broadcast.id);
   }
 
@@ -831,7 +772,6 @@ export class BroadcastComponent implements OnInit, OnDestroy, AfterViewInit {
     console.log('Opening new broadcast form...');
     this.selectedBroadcast = null; // Clear any selected broadcast
     this.showNewBroadcastForm = true;
-    this.showMobileContent = true; // Show on mobile
   }
 
   cancelNewBroadcast(): void {
@@ -842,7 +782,6 @@ export class BroadcastComponent implements OnInit, OnDestroy, AfterViewInit {
     this.isSendingBroadcast = false;
     this.selectedFile = null;
     this.filePreviewUrl = null;
-    this.showMobileContent = false; // Hide on mobile
   }
 
   getMessageTypeDisplay(): string {
@@ -915,49 +854,14 @@ export class BroadcastComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   // Navigation methods
-  onNavigationItemClick(item: NavigationItem): void {
-    // Update active state
-    this.navigationItems.forEach(navItem => {
-      navItem.isActive = navItem.id === item.id;
-    });
-
-    // Navigate based on item
-    switch (item.id) {
-      case 'dashboard':
-        this.router.navigate(['/dashboard']);
-        break;
-      case 'clients':
-        this.router.navigate(['/clients']);
-        break;
-      case 'history':
-        this.router.navigate(['/history']);
-        break;
-      case 'broadcast':
-        // Already on broadcast page
-        break;
-    }
-  }
 
   logout(): void {
     this.authService.logout();
     this.router.navigate(['/auth/login']);
   }
 
-  // UI state methods
-  toggleSidebar(): void {
-    this.sidebarCollapsed = !this.sidebarCollapsed;
-  }
-
-  toggleMobileMenu(): void {
-    this.showMobileMenu = !this.showMobileMenu;
-  }
-
   checkMobile(): void {
     this.isMobile = window.innerWidth <= 768;
-    if (!this.isMobile) {
-      this.showMobileMenu = false;
-      this.showMobileContent = false;
-    }
   }
 
   // Helper method for list items
