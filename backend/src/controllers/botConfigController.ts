@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { BotConfigService } from '../services/botConfigService';
 import { AuthRequest } from '../middleware/auth';
 
-const botConfigService = new BotConfigService();
+const botConfigService = BotConfigService.getInstance();
 
 export const getBotConfig = async (req: AuthRequest, res: Response): Promise<void> => {
   try {

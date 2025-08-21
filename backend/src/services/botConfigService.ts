@@ -41,9 +41,24 @@ interface BotNotificationSettings {
 }
 
 export class BotConfigService {
+  private static instance: BotConfigService | null = null;
   private detectedGroups: TelegramGroup[] = [];
   private isListeningForGroups = false;
   private groupDetectionListeners: ((groups: TelegramGroup[]) => void)[] = [];
+
+  constructor() {
+    if (BotConfigService.instance) {
+      return BotConfigService.instance;
+    }
+    BotConfigService.instance = this;
+  }
+
+  static getInstance(): BotConfigService {
+    if (!BotConfigService.instance) {
+      BotConfigService.instance = new BotConfigService();
+    }
+    return BotConfigService.instance;
+  }
 
   async getBotConfig() {
     let config = await prisma.botConfig.findFirst();
@@ -155,6 +170,7 @@ export class BotConfigService {
   }
 
   async startGroupInvitationListener(): Promise<GroupInvitationStatus> {
+    console.log('BotConfigService: Starting group listener, instance ID:', this.constructor.name);
     this.isListeningForGroups = true;
     this.detectedGroups = [];
 
@@ -346,6 +362,8 @@ export class BotConfigService {
 
   // Method to handle real group detection
   async simulateGroupDetection(groups: TelegramGroup[]): Promise<void> {
+    console.log('BotConfigService: Group detection called, isListening:', this.isListeningForGroups, 'Instance:', this.constructor.name);
+    
     if (this.isListeningForGroups) {
       console.log('Group detection: Adding groups to detected list:', groups);
       this.detectedGroups = [...this.detectedGroups, ...groups];
@@ -373,7 +391,7 @@ export class BotConfigService {
         }
       });
     } else {
-      console.log('Group detection: Not listening for groups, ignoring detection');
+      console.log('Group detection: Not listening for groups, ignoring detection. isListening:', this.isListeningForGroups);
     }
   }
 

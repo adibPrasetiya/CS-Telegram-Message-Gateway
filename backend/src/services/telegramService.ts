@@ -638,7 +638,7 @@ export class TelegramService {
       console.log('Processing bot addition to group:', groupInfo);
 
       // Notify BotConfigService about the detected group
-      const botConfigService = new BotConfigService();
+      const botConfigService = BotConfigService.getInstance();
       await botConfigService.simulateGroupDetection([groupInfo]);
 
       // Send welcome message to the group
