@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { BotConfigService, BotConfig, BotConnectionTest, GroupInvitationStatus } from '../shared/services/bot-config.service';
+import { BotConfigService, BotConfig, BotConnectionTest, GroupInvitationStatus, BotNotificationSettings } from '../shared/services/bot-config.service';
 import { SocketService } from '../shared/services/socket.service';
 import { StepperComponent, StepperStep } from '../shared/components/stepper/stepper.component';
 
@@ -40,7 +40,9 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
       </div>
       
       <!-- Notification Settings -->
-      <div class="panel-item disabled">
+      <div class="panel-item" 
+           [class.active]="activeConfigSection == 'notifications'"
+           (click)="setActiveConfigSection('notifications')">
         <div class="panel-icon">
           <i class="fas fa-bell"></i>
         </div>
@@ -49,12 +51,16 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
           <span>Customize alert preferences</span>
         </div>
         <div class="panel-status">
-          <div class="coming-soon">Soon</div>
+          <div class="status-dot" 
+               [class.connected]="botConfig?.notificationsEnabled"
+               [class.disconnected]="!botConfig?.notificationsEnabled"></div>
         </div>
       </div>
       
       <!-- User Management -->
-      <div class="panel-item disabled">
+      <div class="panel-item" 
+           [class.active]="activeConfigSection === 'users'"
+           (click)="setActiveConfigSection('users')">
         <div class="panel-icon">
           <i class="fas fa-users"></i>
         </div>
@@ -63,7 +69,7 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
           <span>Manage user accounts and permissions</span>
         </div>
         <div class="panel-status">
-          <div class="coming-soon">Soon</div>
+          <div class="status-dot connected"></div>
         </div>
       </div>
       
@@ -376,72 +382,7 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
         </div>
       </div>
 
-      <!-- Step 3: Notifications -->
-      <div class="step-panel" *ngIf="currentStep === 'notifications'">
-        <div class="step-header">
-          <h2>Notification Settings</h2>
-          <p>Customize which events trigger notifications</p>
-        </div>
-
-        <div class="notification-settings">
-          <div class="setting-group">
-            <h3>Client Events</h3>
-            <div class="setting-item">
-              <div class="setting-info">
-                <h4>New Client Messages</h4>
-                <p>Get notified when clients send new messages</p>
-              </div>
-              <label class="toggle-switch">
-                <input type="checkbox" [checked]="true">
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="setting-item">
-              <div class="setting-info">
-                <h4>Client Connected</h4>
-                <p>Notification when a new client starts a conversation</p>
-              </div>
-              <label class="toggle-switch">
-                <input type="checkbox" [checked]="true">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <div class="setting-group">
-            <h3>Session Events</h3>
-            <div class="setting-item">
-              <div class="setting-info">
-                <h4>Session Started</h4>
-                <p>When a customer service agent starts handling a session</p>
-              </div>
-              <label class="toggle-switch">
-                <input type="checkbox" [checked]="true">
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="setting-item">
-              <div class="setting-info">
-                <h4>Session Ended</h4>
-                <p>When a chat session is closed</p>
-              </div>
-              <label class="toggle-switch">
-                <input type="checkbox" [checked]="true">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div class="settings-actions">
-          <button class="btn-primary">
-            <i class="fas fa-save"></i>
-            Save Settings
-          </button>
-        </div>
-      </div>
-
-      <!-- Step 4: Complete -->
+      <!-- Step 3: Complete -->
       <div class="step-panel" *ngIf="currentStep === 'complete'">
         <div class="completion-card">
           <div class="completion-icon">
@@ -470,12 +411,447 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
               <i class="fas fa-paper-plane"></i>
               Send Test Notification
             </button>
-            <button class="btn-secondary" (click)="goToStep('notifications')">
+            <button class="btn-secondary" (click)="setActiveConfigSection('notifications')">
               <i class="fas fa-cog"></i>
               Manage Settings
             </button>
           </div>
         </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Rules Section -->
+    <div class="config-section" *ngIf="showNotificationSection()">
+      <!-- Header -->
+      <div class="settings-header">
+        <div class="header-content">
+          <div class="header-title">
+            <i class="fas fa-bell"></i>
+            <div>
+              <h1>Notification Rules</h1>
+              <p>Customize which events trigger Telegram notifications</p>
+            </div>
+          </div>
+          <div class="header-status" *ngIf="notificationSettings">
+            <div class="status-indicator" [class.configured]="botConfig?.notificationsEnabled">
+              <i class="fas" [class.fa-check-circle]="botConfig?.notificationsEnabled" 
+                 [class.fa-times-circle]="!botConfig?.notificationsEnabled"></i>
+              <span>{{ botConfig?.notificationsEnabled ? 'Enabled' : 'Disabled' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notification Settings Content -->
+      <div class="notification-config-content">
+        <div class="notification-panels">
+          <!-- Client Events Panel -->
+          <div class="notification-panel">
+            <div class="panel-header">
+              <div class="panel-icon">
+                <i class="fas fa-user"></i>
+              </div>
+              <div class="panel-title">
+                <h3>Client Events</h3>
+                <p>Notifications related to client activities</p>
+              </div>
+            </div>
+            
+            <div class="notification-items">
+              <div class="notification-item">
+                <div class="item-info">
+                  <h4>New Client Messages</h4>
+                  <p>Get notified when clients send new messages</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" 
+                         [(ngModel)]="notificationSettings.newClientMessage"
+                         (change)="onNotificationSettingChange()"
+                         [disabled]="isSavingNotifications">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              
+              <div class="notification-item">
+                <div class="item-info">
+                  <h4>Client Connected</h4>
+                  <p>Notification when a new client starts a conversation</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" 
+                         [(ngModel)]="notificationSettings.clientConnected"
+                         (change)="onNotificationSettingChange()"
+                         [disabled]="isSavingNotifications">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              
+              <div class="notification-item">
+                <div class="item-info">
+                  <h4>Client Disconnected</h4>
+                  <p>Notification when a client ends their session</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" 
+                         [(ngModel)]="notificationSettings.clientDisconnected"
+                         (change)="onNotificationSettingChange()"
+                         [disabled]="isSavingNotifications">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Session Events Panel -->
+          <div class="notification-panel">
+            <div class="panel-header">
+              <div class="panel-icon">
+                <i class="fas fa-comments"></i>
+              </div>
+              <div class="panel-title">
+                <h3>Session Events</h3>
+                <p>Notifications about chat session lifecycle</p>
+              </div>
+            </div>
+            
+            <div class="notification-items">
+              <div class="notification-item">
+                <div class="item-info">
+                  <h4>Session Started</h4>
+                  <p>When a customer service agent starts handling a session</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" 
+                         [(ngModel)]="notificationSettings.sessionStarted"
+                         (change)="onNotificationSettingChange()"
+                         [disabled]="isSavingNotifications">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              
+              <div class="notification-item">
+                <div class="item-info">
+                  <h4>Session Ended</h4>
+                  <p>When a chat session is closed</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" 
+                         [(ngModel)]="notificationSettings.sessionEnded"
+                         (change)="onNotificationSettingChange()"
+                         [disabled]="isSavingNotifications">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- CS Activity Panel -->
+          <div class="notification-panel">
+            <div class="panel-header">
+              <div class="panel-icon">
+                <i class="fas fa-headset"></i>
+              </div>
+              <div class="panel-title">
+                <h3>CS Activity</h3>
+                <p>Notifications about customer service activities</p>
+              </div>
+            </div>
+            
+            <div class="notification-items">
+              <div class="notification-item">
+                <div class="item-info">
+                  <h4>CS Message Handling</h4>
+                  <p>When customer service agents handle messages</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" 
+                         [(ngModel)]="notificationSettings.csMessageHandling"
+                         (change)="onNotificationSettingChange()"
+                         [disabled]="isSavingNotifications">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="notification-actions">
+          <button class="btn-primary" 
+                  (click)="saveNotificationSettings()"
+                  [disabled]="isSavingNotifications || !hasNotificationChanges">
+            <i *ngIf="!isSavingNotifications" class="fas fa-save"></i>
+            <i *ngIf="isSavingNotifications" class="fas fa-spinner fa-spin"></i>
+            {{ isSavingNotifications ? 'Saving...' : 'Save Settings' }}
+          </button>
+          
+          <button class="btn-secondary" 
+                  (click)="sendTestNotification()"
+                  [disabled]="isSavingNotifications">
+            <i class="fas fa-paper-plane"></i>
+            Send Test Notification
+          </button>
+          
+          <button class="btn-secondary" 
+                  (click)="resetNotificationSettings()"
+                  [disabled]="isSavingNotifications">
+            <i class="fas fa-undo"></i>
+            Reset to Defaults
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Management Section -->
+    <div class="config-section" *ngIf="activeConfigSection === 'users'">
+      <!-- Header -->
+      <div class="settings-header">
+        <div class="header-content">
+          <div class="header-title">
+            <i class="fas fa-users"></i>
+            <div>
+              <h1>User Management</h1>
+              <p>Manage user accounts, roles, and permissions</p>
+            </div>
+          </div>
+          <div class="header-status">
+            <div class="status-indicator configured">
+              <i class="fas fa-check-circle"></i>
+              <span>Active</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- User Management Content -->
+      <div class="user-management-content">
+        <div class="user-management-container">
+          <!-- User Stats Cards -->
+          <div class="stats-grid">
+            <div class="stats-card">
+              <div class="stats-icon">
+                <i class="fas fa-users"></i>
+              </div>
+              <div class="stats-info">
+                <h3>15</h3>
+                <p>Total Users</p>
+              </div>
+            </div>
+            <div class="stats-card">
+              <div class="stats-icon">
+                <i class="fas fa-user-shield"></i>
+              </div>
+              <div class="stats-info">
+                <h3>3</h3>
+                <p>Administrators</p>
+              </div>
+            </div>
+            <div class="stats-card">
+              <div class="stats-icon">
+                <i class="fas fa-headset"></i>
+              </div>
+              <div class="stats-info">
+                <h3>8</h3>
+                <p>Agents</p>
+              </div>
+            </div>
+            <div class="stats-card">
+              <div class="stats-icon">
+                <i class="fas fa-user-clock"></i>
+              </div>
+              <div class="stats-info">
+                <h3>4</h3>
+                <p>Online</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- User Management Panel -->
+          <div class="management-panel">
+            <!-- Panel Header -->
+            <div class="panel-header">
+              <div class="panel-title">
+                <h3>User List</h3>
+                <p>Manage user accounts and permissions</p>
+              </div>
+              <div class="panel-actions">
+                <button class="btn-primary">
+                  <i class="fas fa-plus"></i>
+                  Add User
+                </button>
+                <button class="btn-secondary">
+                  <i class="fas fa-filter"></i>
+                  Filter
+                </button>
+                <button class="btn-secondary">
+                  <i class="fas fa-download"></i>
+                  Export
+                </button>
+              </div>
+            </div>
+
+            <!-- User List -->
+            <div class="user-list">
+              <!-- User Item 1 -->
+              <div class="user-item">
+                <div class="user-avatar">
+                  <img src="https://via.placeholder.com/40x40/5288c1/ffffff?text=JD" alt="User Avatar">
+                </div>
+                <div class="user-info">
+                  <h4>John Doe</h4>
+                  <p>john.doe@company.com</p>
+                </div>
+                <div class="user-role">
+                  <span class="role-badge admin">Administrator</span>
+                </div>
+                <div class="user-status">
+                  <span class="status-badge online">Online</span>
+                </div>
+                <div class="user-actions">
+                  <button class="action-btn" title="Edit User">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button class="action-btn" title="View Details">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button class="action-btn danger" title="Delete User">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- User Item 2 -->
+              <div class="user-item">
+                <div class="user-avatar">
+                  <img src="https://via.placeholder.com/40x40/28a745/ffffff?text=SM" alt="User Avatar">
+                </div>
+                <div class="user-info">
+                  <h4>Sarah Miller</h4>
+                  <p>sarah.miller@company.com</p>
+                </div>
+                <div class="user-role">
+                  <span class="role-badge agent">Agent</span>
+                </div>
+                <div class="user-status">
+                  <span class="status-badge online">Online</span>
+                </div>
+                <div class="user-actions">
+                  <button class="action-btn" title="Edit User">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button class="action-btn" title="View Details">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button class="action-btn danger" title="Delete User">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- User Item 3 -->
+              <div class="user-item">
+                <div class="user-avatar">
+                  <img src="https://via.placeholder.com/40x40/ffc107/ffffff?text=MJ" alt="User Avatar">
+                </div>
+                <div class="user-info">
+                  <h4>Mike Johnson</h4>
+                  <p>mike.johnson@company.com</p>
+                </div>
+                <div class="user-role">
+                  <span class="role-badge agent">Agent</span>
+                </div>
+                <div class="user-status">
+                  <span class="status-badge offline">Offline</span>
+                </div>
+                <div class="user-actions">
+                  <button class="action-btn" title="Edit User">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button class="action-btn" title="View Details">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button class="action-btn danger" title="Delete User">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- User Item 4 -->
+              <div class="user-item">
+                <div class="user-avatar">
+                  <img src="https://via.placeholder.com/40x40/dc3545/ffffff?text=LD" alt="User Avatar">
+                </div>
+                <div class="user-info">
+                  <h4>Lisa Davis</h4>
+                  <p>lisa.davis@company.com</p>
+                </div>
+                <div class="user-role">
+                  <span class="role-badge moderator">Moderator</span>
+                </div>
+                <div class="user-status">
+                  <span class="status-badge online">Online</span>
+                </div>
+                <div class="user-actions">
+                  <button class="action-btn" title="Edit User">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button class="action-btn" title="View Details">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button class="action-btn danger" title="Delete User">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- User Item 5 -->
+              <div class="user-item">
+                <div class="user-avatar">
+                  <img src="https://via.placeholder.com/40x40/6f42c1/ffffff?text=RW" alt="User Avatar">
+                </div>
+                <div class="user-info">
+                  <h4>Robert Wilson</h4>
+                  <p>robert.wilson@company.com</p>
+                </div>
+                <div class="user-role">
+                  <span class="role-badge agent">Agent</span>
+                </div>
+                <div class="user-status">
+                  <span class="status-badge away">Away</span>
+                </div>
+                <div class="user-actions">
+                  <button class="action-btn" title="Edit User">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button class="action-btn" title="View Details">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button class="action-btn danger" title="Delete User">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination-container">
+              <div class="pagination-info">
+                Showing 1-5 of 15 users
+              </div>
+              <div class="pagination">
+                <button class="pagination-btn" disabled>
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <button class="pagination-btn active">1</button>
+                <button class="pagination-btn">2</button>
+                <button class="pagination-btn">3</button>
+                <button class="pagination-btn">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1584,6 +1960,186 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
       text-align: center;
     }
 
+    /* Notification Configuration Styles */
+    .notification-config-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px;
+    }
+
+    .notification-config-content::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .notification-config-content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .notification-config-content::-webkit-scrollbar-thumb {
+      background: #2b374a;
+      border-radius: 3px;
+    }
+
+    .notification-panels {
+      max-width: 800px;
+      margin: 0 auto 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .notification-panel {
+      background: #232e3c;
+      border: 1px solid #2b374a;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 24px;
+      background: #17212b;
+      border-bottom: 1px solid #2b374a;
+    }
+
+    .panel-header .panel-icon {
+      width: 40px;
+      height: 40px;
+      background: rgba(82, 136, 193, 0.1);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .panel-header .panel-icon i {
+      color: #5288c1;
+      font-size: 18px;
+    }
+
+    .panel-title h3 {
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0 0 4px 0;
+    }
+
+    .panel-title p {
+      color: #8696a8;
+      font-size: 14px;
+      margin: 0;
+    }
+
+    .notification-items {
+      padding: 0;
+    }
+
+    .notification-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px;
+      border-bottom: 1px solid #2b374a;
+      transition: background-color 0.2s;
+    }
+
+    .notification-item:last-child {
+      border-bottom: none;
+    }
+
+    .notification-item:hover {
+      background: rgba(82, 136, 193, 0.03);
+    }
+
+    .notification-item .item-info {
+      flex: 1;
+    }
+
+    .notification-item .item-info h4 {
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 500;
+      margin: 0 0 4px 0;
+    }
+
+    .notification-item .item-info p {
+      color: #8696a8;
+      font-size: 13px;
+      margin: 0;
+      line-height: 1.4;
+    }
+
+    /* Enhanced Toggle Switch */
+    .notification-item .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 52px;
+      height: 28px;
+      margin-left: 16px;
+    }
+
+    .notification-item .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .notification-item .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #2b374a;
+      transition: 0.3s;
+      border-radius: 28px;
+      border: 2px solid #2b374a;
+    }
+
+    .notification-item .slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 2px;
+      bottom: 2px;
+      background-color: #8696a8;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+
+    .notification-item input:checked + .slider {
+      background-color: #5288c1;
+      border-color: #5288c1;
+    }
+
+    .notification-item input:checked + .slider:before {
+      transform: translateX(24px);
+      background-color: white;
+    }
+
+    .notification-item input:disabled + .slider {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Notification Actions */
+    .notification-actions {
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      padding: 24px;
+      background: #232e3c;
+      border: 1px solid #2b374a;
+      border-radius: 12px;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .settings-container {
@@ -1632,12 +2188,446 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
         flex-direction: column;
       }
 
+      .notification-config-content {
+        padding: 20px;
+      }
+
+      .notification-actions {
+        flex-direction: column;
+        padding: 20px;
+      }
+
+      .panel-header {
+        padding: 16px 20px;
+      }
+
+      .notification-item {
+        padding: 16px 20px;
+      }
+
       .panel-item {
         padding: 12px 16px;
       }
 
       .sidebar-header {
         padding: 16px;
+      }
+    }
+
+    /* User Management Styles */
+    .user-management-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px;
+    }
+
+    .user-management-content::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .user-management-content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .user-management-content::-webkit-scrollbar-thumb {
+      background: #2b374a;
+      border-radius: 3px;
+    }
+
+    .user-management-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    .stats-card {
+      background: #232e3c;
+      border: 1px solid #2b374a;
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .stats-icon {
+      width: 56px;
+      height: 56px;
+      background: rgba(82, 136, 193, 0.1);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .stats-icon i {
+      color: #5288c1;
+      font-size: 24px;
+    }
+
+    .stats-info h3 {
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 4px 0;
+    }
+
+    .stats-info p {
+      color: #8696a8;
+      font-size: 14px;
+      margin: 0;
+      font-weight: 500;
+    }
+
+    /* Management Panel */
+    .management-panel {
+      background: #232e3c;
+      border: 1px solid #2b374a;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .management-panel .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px;
+      background: #17212b;
+      border-bottom: 1px solid #2b374a;
+    }
+
+    .management-panel .panel-title h3 {
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 4px 0;
+    }
+
+    .management-panel .panel-title p {
+      color: #8696a8;
+      font-size: 14px;
+      margin: 0;
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    /* User List */
+    .user-list {
+      background: #232e3c;
+    }
+
+    .user-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 24px;
+      border-bottom: 1px solid #2b374a;
+      transition: background-color 0.2s;
+    }
+
+    .user-item:last-child {
+      border-bottom: none;
+    }
+
+    .user-item:hover {
+      background: rgba(82, 136, 193, 0.03);
+    }
+
+    .user-avatar {
+      width: 48px;
+      height: 48px;
+      flex-shrink: 0;
+    }
+
+    .user-avatar img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .user-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .user-info h4 {
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 500;
+      margin: 0 0 4px 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .user-info p {
+      color: #8696a8;
+      font-size: 13px;
+      margin: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .user-role {
+      flex-shrink: 0;
+    }
+
+    .role-badge {
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .role-badge.admin {
+      background: rgba(220, 53, 69, 0.2);
+      color: #dc3545;
+      border: 1px solid rgba(220, 53, 69, 0.3);
+    }
+
+    .role-badge.agent {
+      background: rgba(40, 167, 69, 0.2);
+      color: #28a745;
+      border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+
+    .role-badge.moderator {
+      background: rgba(255, 193, 7, 0.2);
+      color: #ffc107;
+      border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+
+    .user-status {
+      flex-shrink: 0;
+      margin-left: 16px;
+    }
+
+    .status-badge.online {
+      background: rgba(40, 167, 69, 0.2);
+      color: #28a745;
+      border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+
+    .status-badge.offline {
+      background: rgba(108, 117, 125, 0.2);
+      color: #6c757d;
+      border: 1px solid rgba(108, 117, 125, 0.3);
+    }
+
+    .status-badge.away {
+      background: rgba(255, 193, 7, 0.2);
+      color: #ffc107;
+      border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+
+    .user-actions {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+      margin-left: 16px;
+    }
+
+    .action-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 8px;
+      background: #2b374a;
+      color: #8696a8;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .action-btn:hover {
+      background: #5288c1;
+      color: white;
+    }
+
+    .action-btn.danger:hover {
+      background: #dc3545;
+      color: white;
+    }
+
+    .action-btn i {
+      font-size: 14px;
+    }
+
+    /* Pagination */
+    .pagination-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px;
+      background: #17212b;
+      border-top: 1px solid #2b374a;
+    }
+
+    .pagination-info {
+      color: #8696a8;
+      font-size: 14px;
+    }
+
+    .pagination {
+      display: flex;
+      gap: 8px;
+    }
+
+    .pagination-btn {
+      width: 36px;
+      height: 36px;
+      border: 1px solid #2b374a;
+      border-radius: 8px;
+      background: #232e3c;
+      color: #8696a8;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .pagination-btn:hover:not(:disabled) {
+      background: #5288c1;
+      color: white;
+      border-color: #5288c1;
+    }
+
+    .pagination-btn.active {
+      background: #5288c1;
+      color: white;
+      border-color: #5288c1;
+    }
+
+    .pagination-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .pagination-btn i {
+      font-size: 12px;
+    }
+
+    /* Responsive Design for User Management */
+    @media (max-width: 1024px) {
+      .stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+      }
+
+      .stats-card {
+        padding: 20px;
+      }
+
+      .panel-actions {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .user-management-content {
+        padding: 20px;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .stats-card {
+        padding: 16px;
+      }
+
+      .management-panel .panel-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 20px;
+      }
+
+      .panel-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .user-item {
+        padding: 16px 20px;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .user-info {
+        order: 1;
+        flex: 1 1 100%;
+      }
+
+      .user-role {
+        order: 2;
+      }
+
+      .user-status {
+        order: 3;
+        margin-left: auto;
+      }
+
+      .user-actions {
+        order: 4;
+        margin-left: 0;
+      }
+
+      .pagination-container {
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px 20px;
+      }
+
+      .pagination {
+        justify-content: center;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .user-item {
+        gap: 8px;
+      }
+
+      .user-avatar {
+        width: 40px;
+        height: 40px;
+      }
+
+      .user-actions {
+        gap: 4px;
+      }
+
+      .action-btn {
+        width: 32px;
+        height: 32px;
+      }
+
+      .pagination-btn {
+        width: 32px;
+        height: 32px;
       }
     }
   `]
@@ -1667,6 +2657,19 @@ export class SettingsComponent implements OnInit, OnDestroy {
   // Group Selection
   selectedGroupId: string = '';
   isSettingUpGroup: boolean = false;
+  
+  // Notification Settings
+  notificationSettings: BotNotificationSettings = {
+    newClientMessage: true,
+    csMessageHandling: true,
+    sessionEnded: true,
+    sessionStarted: true,
+    clientConnected: true,
+    clientDisconnected: true
+  };
+  originalNotificationSettings: BotNotificationSettings = { ...this.notificationSettings };
+  isSavingNotifications: boolean = false;
+  hasNotificationChanges: boolean = false;
 
   constructor(
     private botConfigService: BotConfigService,
@@ -1699,6 +2702,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.activeConfigSection = section;
     if (section === 'bot') {
       this.loadBotConfiguration();
+    } else if (section === 'notifications') {
+      this.loadNotificationSettings();
     }
   }
 
@@ -1714,8 +2719,6 @@ export class SettingsComponent implements OnInit, OnDestroy {
           // Auto-navigate to the next incomplete step
           if (config.isConnected && !config.isGroupConfigured) {
             this.currentStep = 'group';
-          } else if (config.isGroupConfigured && !config.notificationsEnabled) {
-            this.currentStep = 'notifications';
           } else if (config.isConnected && config.isGroupConfigured) {
             this.currentStep = 'complete';
           }
@@ -1876,8 +2879,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
           this.isSettingUpGroup = false;
           this.botConfigService.updateGroupInvitationStatus(this.groupInvitationStatus);
           
+          // Enable notifications by default when group is confirmed
+          this.enableDefaultNotifications();
+          
           // Move to next step
-          this.currentStep = 'notifications';
+          this.currentStep = 'complete';
           this.updateStepperSteps();
           
           console.log('Group configuration saved successfully');
@@ -1936,15 +2942,6 @@ export class SettingsComponent implements OnInit, OnDestroy {
         icon: 'fa-users'
       },
       {
-        id: 'notifications',
-        title: 'Settings',
-        description: 'Customize alerts',
-        isCompleted: false,
-        isActive: false,
-        isDisabled: true,
-        icon: 'fa-bell'
-      },
-      {
         id: 'complete',
         title: 'Complete',
         description: 'Ready to use',
@@ -1968,10 +2965,6 @@ export class SettingsComponent implements OnInit, OnDestroy {
         case 'group':
           step.isCompleted = this.botConfig?.isGroupConfigured || false;
           step.isDisabled = !this.botConfig?.isConnected;
-          break;
-        case 'notifications':
-          step.isCompleted = this.botConfig?.notificationsEnabled || false;
-          step.isDisabled = !this.botConfig?.isGroupConfigured;
           break;
         case 'complete':
           step.isCompleted = this.botConfig?.isConnected && this.botConfig?.isGroupConfigured || false;
@@ -2018,5 +3011,102 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.isEditingToken = false;
     this.botTokenInput = '';
     this.connectionTestResult = null;
+  }
+
+  // Notification Settings Methods
+  loadNotificationSettings(): void {
+    this.botConfigService.getNotificationSettings()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (settings) => {
+          this.notificationSettings = settings;
+          this.originalNotificationSettings = { ...settings };
+          this.hasNotificationChanges = false;
+        },
+        error: (error) => {
+          console.error('Error loading notification settings:', error);
+        }
+      });
+  }
+
+  onNotificationSettingChange(): void {
+    this.hasNotificationChanges = JSON.stringify(this.notificationSettings) !== JSON.stringify(this.originalNotificationSettings);
+  }
+
+  saveNotificationSettings(): void {
+    if (!this.hasNotificationChanges) return;
+
+    this.isSavingNotifications = true;
+
+    this.botConfigService.updateNotificationSettings(this.notificationSettings)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (updatedSettings) => {
+          this.notificationSettings = updatedSettings;
+          this.originalNotificationSettings = { ...updatedSettings };
+          this.hasNotificationChanges = false;
+          this.isSavingNotifications = false;
+          
+          // Update bot config to reflect notifications enabled
+          if (this.botConfig) {
+            this.botConfig.notificationsEnabled = true;
+          }
+          
+          console.log('Notification settings saved successfully');
+        },
+        error: (error) => {
+          console.error('Error saving notification settings:', error);
+          this.isSavingNotifications = false;
+        }
+      });
+  }
+
+  resetNotificationSettings(): void {
+    this.notificationSettings = {
+      newClientMessage: true,
+      csMessageHandling: true,
+      sessionEnded: true,
+      sessionStarted: true,
+      clientConnected: true,
+      clientDisconnected: true
+    };
+    this.onNotificationSettingChange();
+  }
+
+  showNotificationSection(): boolean {
+    return this.activeConfigSection === 'notifications';
+  }
+
+  enableDefaultNotifications(): void {
+    // Set default notification settings and save them
+    this.notificationSettings = {
+      newClientMessage: true,
+      csMessageHandling: true,
+      sessionEnded: true,
+      sessionStarted: true,
+      clientConnected: true,
+      clientDisconnected: true
+    };
+
+    // Save the default notification settings
+    this.botConfigService.updateNotificationSettings(this.notificationSettings)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (updatedSettings) => {
+          this.notificationSettings = updatedSettings;
+          this.originalNotificationSettings = { ...updatedSettings };
+          this.hasNotificationChanges = false;
+          
+          // Update bot config to reflect notifications enabled
+          if (this.botConfig) {
+            this.botConfig.notificationsEnabled = true;
+          }
+          
+          console.log('Default notification settings enabled');
+        },
+        error: (error) => {
+          console.error('Error enabling default notifications:', error);
+        }
+      });
   }
 }
