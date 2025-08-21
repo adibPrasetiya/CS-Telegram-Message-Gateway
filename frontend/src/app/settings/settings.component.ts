@@ -116,6 +116,13 @@ type ConfigSection = 'bot' | 'notifications' | 'users' | '';
       </div>
     </div>
 
+    <!-- Debug Section -->
+    <div style="position: fixed; top: 10px; right: 10px; background: red; color: white; padding: 10px; z-index: 9999;" *ngIf="activeConfigSection">
+      Active Section: {{ activeConfigSection }}
+      <br>
+      Is User Management: {{ isUserManagementSection() }}
+    </div>
+
     <!-- Bot Configuration Section -->
     <div class="config-section" *ngIf="activeConfigSection === 'bot'">
       <!-- Header -->
@@ -605,8 +612,26 @@ type ConfigSection = 'bot' | 'notifications' | 'users' | '';
       </div>
     </div>
 
-    <!-- User Management Section -->
-    <div class="config-section" *ngIf="isUserManagementSection()">
+    <!-- Test Section - Always visible hardcoded test -->
+    <div style="position: fixed !important; top: 50px !important; left: 10px !important; background: green !important; color: white !important; padding: 10px !important; z-index: 999999 !important; border: 2px solid blue !important;">
+      <p style="color: white !important;">ALWAYS VISIBLE - showUserMgmt: {{ showUserManagement }}</p>
+    </div>
+
+    <!-- Test Section - Using boolean property with extreme CSS -->
+    <div *ngIf="showUserManagement" style="position: fixed !important; top: 100px !important; right: 10px !important; background: yellow !important; color: black !important; padding: 20px !important; z-index: 999999 !important; width: 300px !important; height: 200px !important; border: 5px solid red !important; display: block !important; visibility: visible !important; opacity: 1 !important;">
+      <h2 style="color: black !important; font-size: 18px !important;">USERS SECTION DETECTED!</h2>
+      <p style="color: black !important;">Active: {{ activeConfigSection }}</p>
+      <p style="color: black !important;">ShowUserMgmt: {{ showUserManagement }}</p>
+    </div>
+    
+    <!-- Test Section - Any other section -->
+    <div *ngIf="activeConfigSection && !isUserManagementSection()" style="position: fixed; top: 150px; right: 10px; background: orange; color: black; padding: 20px; z-index: 10000; width: 300px;">
+      <h2>OTHER SECTION!</h2>
+      <p>Active: {{ activeConfigSection }}</p>
+    </div>
+
+    <!-- User Management Section (temporarily removed for testing) -->
+    <div class="config-section" *ngIf="false">
       <!-- Header -->
       <div class="settings-header">
         <div class="header-content">
@@ -2672,6 +2697,12 @@ export class SettingsComponent implements OnInit, OnDestroy {
   originalNotificationSettings: BotNotificationSettings = { ...this.notificationSettings };
   isSavingNotifications: boolean = false;
   hasNotificationChanges: boolean = false;
+  
+  get isUsersActive(): boolean {
+    return this.activeConfigSection === 'users';
+  }
+  
+  showUserManagement: boolean = false;
 
   constructor(
     private botConfigService: BotConfigService,
@@ -2702,6 +2733,9 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   setActiveConfigSection(section: ConfigSection): void {
     this.activeConfigSection = section;
+    this.showUserManagement = section === 'users';
+    console.log('setActiveConfigSection:', section, 'showUserManagement:', this.showUserManagement);
+    
     if (section === 'bot') {
       this.loadBotConfiguration();
     } else if (section === 'notifications') {
@@ -3082,7 +3116,12 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
 
   isUserManagementSection(): boolean {
+    console.log('isUserManagementSection called:', this.activeConfigSection, this.activeConfigSection === 'users');
     return this.activeConfigSection === 'users';
+  }
+
+  hasActiveSection(): boolean {
+    return this.activeConfigSection !== '';
   }
 
   enableDefaultNotifications(): void {

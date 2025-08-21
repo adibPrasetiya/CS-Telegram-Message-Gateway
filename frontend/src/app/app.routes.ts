@@ -43,7 +43,7 @@ export const routes: Routes = [
       },
       {
         path: 'settings',
-        loadComponent: () => import('./settings/settings.component').then(m => m.SettingsComponent)
+        loadChildren: () => import('./settings/settings.module').then(m => m.SettingsModule)
       }
     ]
   },
