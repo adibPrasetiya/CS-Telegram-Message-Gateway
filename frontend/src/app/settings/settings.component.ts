@@ -2632,6 +2632,8 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
     }
   `]
 })
+type ConfigSection = 'bot' | 'notifications' | 'users' | '';
+
 export class SettingsComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
@@ -2641,7 +2643,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   isEditingToken: boolean = false;
 
   // Bot Configuration
-  activeConfigSection: string = '';
+  activeConfigSection: ConfigSection = '';
   botConfig: BotConfig | null = null;
   groupInvitationStatus: GroupInvitationStatus = {
     isWaitingForInvitation: false,
@@ -2698,12 +2700,14 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  setActiveConfigSection(section: string): void {
+  setActiveConfigSection(section: ConfigSection): void {
     this.activeConfigSection = section;
     if (section === 'bot') {
       this.loadBotConfiguration();
     } else if (section === 'notifications') {
       this.loadNotificationSettings();
+    } else if (section === 'users') {
+      // User management section - no additional loading needed for now
     }
   }
 
