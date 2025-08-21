@@ -700,7 +700,7 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
                 </div>
                 <div class="user-info">
                   <h4>John Doe</h4>
-                  <p>john.doe@company.com</p>
+                  <p>john.doe&#64;company.com</p>
                 </div>
                 <div class="user-role">
                   <span class="role-badge admin">Administrator</span>
@@ -728,7 +728,7 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
                 </div>
                 <div class="user-info">
                   <h4>Sarah Miller</h4>
-                  <p>sarah.miller@company.com</p>
+                  <p>sarah.miller&#64;company.com</p>
                 </div>
                 <div class="user-role">
                   <span class="role-badge agent">Agent</span>
@@ -756,7 +756,7 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
                 </div>
                 <div class="user-info">
                   <h4>Mike Johnson</h4>
-                  <p>mike.johnson@company.com</p>
+                  <p>mike.johnson&#64;company.com</p>
                 </div>
                 <div class="user-role">
                   <span class="role-badge agent">Agent</span>
@@ -784,7 +784,7 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
                 </div>
                 <div class="user-info">
                   <h4>Lisa Davis</h4>
-                  <p>lisa.davis@company.com</p>
+                  <p>lisa.davis&#64;company.com</p>
                 </div>
                 <div class="user-role">
                   <span class="role-badge moderator">Moderator</span>
@@ -812,7 +812,7 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
                 </div>
                 <div class="user-info">
                   <h4>Robert Wilson</h4>
-                  <p>robert.wilson@company.com</p>
+                  <p>robert.wilson&#64;company.com</p>
                 </div>
                 <div class="user-role">
                   <span class="role-badge agent">Agent</span>
