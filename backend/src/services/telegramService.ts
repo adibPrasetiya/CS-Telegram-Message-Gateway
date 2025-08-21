@@ -2,6 +2,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import prisma from '../utils/database';
 import { TelegramMessage } from '../types';
 import { Stream } from 'stream';
+import { BotConfigService } from './botConfigService';
 
 export class TelegramService {
   private bot!: TelegramBot;
@@ -63,6 +64,23 @@ export class TelegramService {
   private setupMessageHandlers(): void {
     this.bot.on('message', async (msg) => {
       try {
+        // Check if this is a group message and bot was added to group
+        if ((msg.chat.type === 'group' || msg.chat.type === 'supergroup') && 
+            msg.new_chat_members) {
+          const botMe = await this.bot.getMe();
+          const botAdded = msg.new_chat_members.some((member: any) => member.is_bot && member.username === botMe.username);
+          
+          if (botAdded) {
+            console.log('Bot was added to group:', {
+              groupId: msg.chat.id,
+              groupTitle: msg.chat.title,
+              groupType: msg.chat.type
+            });
+            await this.handleBotAddedToGroup(msg);
+            return;
+          }
+        }
+
         await this.handleIncomingMessage(msg);
       } catch (error) {
         console.error('Error handling Telegram message:', error);
@@ -597,6 +615,41 @@ export class TelegramService {
 
   public static getInstance(): TelegramService | null {
     return TelegramService.instance;
+  }
+
+  async handleBotAddedToGroup(msg: any): Promise<void> {
+    try {
+      let memberCount: number | undefined = undefined;
+      
+      // Get member count
+      try {
+        memberCount = await this.bot.getChatMemberCount(msg.chat.id);
+      } catch (error) {
+        console.warn('Could not get member count for group:', error);
+      }
+
+      const groupInfo = {
+        id: msg.chat.id.toString(),
+        title: msg.chat.title,
+        type: msg.chat.type === 'supergroup' ? 'supergroup' as const : 'group' as const,
+        memberCount: memberCount
+      };
+
+      console.log('Processing bot addition to group:', groupInfo);
+
+      // Notify BotConfigService about the detected group
+      const botConfigService = new BotConfigService();
+      await botConfigService.simulateGroupDetection([groupInfo]);
+
+      // Send welcome message to the group
+      const welcomeMessage = `🤖 Hello! I'm the Help Desk Bot.\n\nI've been added to monitor this group for notifications about:\n• New client messages\n• Session activities\n• Customer service updates\n\nTo complete the setup, please confirm this group in your Help Desk settings.`;
+      
+      await this.sendMessage(msg.chat.id, welcomeMessage);
+      
+      console.log('Bot addition to group processed successfully');
+    } catch (error) {
+      console.error('Error handling bot addition to group:', error);
+    }
   }
 
   public async testConnection(): Promise<boolean> {

@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BotConfigService, BotConfig, BotConnectionTest, GroupInvitationStatus } from '../shared/services/bot-config.service';
+import { SocketService } from '../shared/services/socket.service';
 
 @Component({
   selector: 'app-settings',
@@ -1233,11 +1234,23 @@ export class SettingsComponent implements OnInit, OnDestroy {
   selectedGroupId: string = '';
   isSettingUpGroup: boolean = false;
 
-  constructor(private botConfigService: BotConfigService) {}
+  constructor(
+    private botConfigService: BotConfigService,
+    private socketService: SocketService
+  ) {}
 
   ngOnInit(): void {
     // Load initial configuration
     this.loadBotConfiguration();
+    
+    // Listen for real-time group detection
+    this.socketService.onGroupsDetected()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(status => {
+        console.log('Frontend: Groups detected via socket', status);
+        this.groupInvitationStatus = status;
+        this.botConfigService.updateGroupInvitationStatus(status);
+      });
   }
 
   ngOnDestroy(): void {

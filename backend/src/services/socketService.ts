@@ -48,6 +48,7 @@ export class SocketService {
       this.handleJoinRooms(socket);
       this.handleChatEvents(socket);
       this.handleStatusEvents(socket);
+      this.handleBotConfigEvents(socket);
       this.handleDisconnection(socket);
     });
   }
@@ -190,6 +191,22 @@ export class SocketService {
     });
   }
 
+  private handleBotConfigEvents(socket: AuthenticatedSocket): void {
+    // Join bot config room for admin users
+    if (socket.userRole === 'ADMIN') {
+      socket.join('bot_config');
+    }
+
+    socket.on('start_group_listener', () => {
+      console.log('Socket: Starting group listener for user', socket.userId);
+      // The actual listening is handled by bot config controller
+    });
+
+    socket.on('stop_group_listener', () => {
+      console.log('Socket: Stopping group listener for user', socket.userId);
+    });
+  }
+
   private handleDisconnection(socket: AuthenticatedSocket): void {
     socket.on('disconnect', async () => {
       console.log(`User ${socket.userId} disconnected`);
@@ -232,5 +249,9 @@ export class SocketService {
 
   public emitToAll(event: string, data: any): void {
     this.io.emit(event, data);
+  }
+
+  public emitToBotConfig(event: string, data: any): void {
+    this.io.to('bot_config').emit(event, data);
   }
 }

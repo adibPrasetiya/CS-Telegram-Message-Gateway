@@ -142,4 +142,22 @@ export class SocketService {
       this.socket?.on('notification', (data: any) => observer.next(data));
     });
   }
+
+  // Bot Configuration Events
+  onGroupsDetected(): Observable<{ isWaitingForInvitation: boolean; detectedGroups: any[] }> {
+    return new Observable(observer => {
+      this.socket?.on('groups_detected', (data: { isWaitingForInvitation: boolean; detectedGroups: any[] }) => {
+        console.log('Socket: Groups detected event received', data);
+        observer.next(data);
+      });
+    });
+  }
+
+  startGroupListener(): void {
+    this.socket?.emit('start_group_listener');
+  }
+
+  stopGroupListener(): void {
+    this.socket?.emit('stop_group_listener');
+  }
 }

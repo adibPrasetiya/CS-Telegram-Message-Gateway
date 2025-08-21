@@ -43,6 +43,7 @@ interface BotNotificationSettings {
 export class BotConfigService {
   private detectedGroups: TelegramGroup[] = [];
   private isListeningForGroups = false;
+  private groupDetectionListeners: ((groups: TelegramGroup[]) => void)[] = [];
 
   async getBotConfig() {
     let config = await prisma.botConfig.findFirst();
@@ -343,10 +344,49 @@ export class BotConfigService {
     this.detectedGroups = [];
   }
 
-  // Method to simulate group detection (for testing purposes)
+  // Method to handle real group detection
   async simulateGroupDetection(groups: TelegramGroup[]): Promise<void> {
     if (this.isListeningForGroups) {
-      this.detectedGroups = groups;
+      console.log('Group detection: Adding groups to detected list:', groups);
+      this.detectedGroups = [...this.detectedGroups, ...groups];
+      
+      // Emit real-time update via WebSocket
+      try {
+        const io = (global as any).io;
+        if (io) {
+          io.to('bot_config').emit('groups_detected', {
+            isWaitingForInvitation: this.isListeningForGroups,
+            detectedGroups: this.detectedGroups
+          });
+          console.log('Group detection: Emitted groups_detected event via WebSocket');
+        }
+      } catch (error) {
+        console.error('Error emitting group detection via WebSocket:', error);
+      }
+      
+      // Notify all listeners about the new groups
+      this.groupDetectionListeners.forEach(listener => {
+        try {
+          listener(this.detectedGroups);
+        } catch (error) {
+          console.error('Error notifying group detection listener:', error);
+        }
+      });
+    } else {
+      console.log('Group detection: Not listening for groups, ignoring detection');
+    }
+  }
+
+  // Add listener for group detection
+  addGroupDetectionListener(listener: (groups: TelegramGroup[]) => void): void {
+    this.groupDetectionListeners.push(listener);
+  }
+
+  // Remove listener for group detection
+  removeGroupDetectionListener(listener: (groups: TelegramGroup[]) => void): void {
+    const index = this.groupDetectionListeners.indexOf(listener);
+    if (index > -1) {
+      this.groupDetectionListeners.splice(index, 1);
     }
   }
 
