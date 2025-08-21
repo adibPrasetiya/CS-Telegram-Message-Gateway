@@ -7,6 +7,8 @@ import { BotConfigService, BotConfig, BotConnectionTest, GroupInvitationStatus, 
 import { SocketService } from '../shared/services/socket.service';
 import { StepperComponent, StepperStep } from '../shared/components/stepper/stepper.component';
 
+type ConfigSection = 'bot' | 'notifications' | 'users' | '';
+
 @Component({
   selector: 'app-settings',
   standalone: true,
@@ -2632,8 +2634,6 @@ import { StepperComponent, StepperStep } from '../shared/components/stepper/step
     }
   `]
 })
-type ConfigSection = 'bot' | 'notifications' | 'users' | '';
-
 export class SettingsComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
