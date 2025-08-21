@@ -606,7 +606,7 @@ type ConfigSection = 'bot' | 'notifications' | 'users' | '';
     </div>
 
     <!-- User Management Section -->
-    <div class="config-section" *ngIf="activeConfigSection === 'users'">
+    <div class="config-section" *ngIf="isUserManagementSection()">
       <!-- Header -->
       <div class="settings-header">
         <div class="header-content">
@@ -3079,6 +3079,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   showNotificationSection(): boolean {
     return this.activeConfigSection === 'notifications';
+  }
+
+  isUserManagementSection(): boolean {
+    return this.activeConfigSection === 'users';
   }
 
   enableDefaultNotifications(): void {
