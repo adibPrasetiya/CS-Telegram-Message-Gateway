@@ -83,6 +83,14 @@ export class BotConfigService {
       groupTitle: config.groupTitle,
       isGroupConfigured: config.isGroupConfigured,
       notificationsEnabled: config.notificationsEnabled,
+      notificationSettings: {
+        newClientMessage: config.notifyNewClientMessage,
+        csMessageHandling: config.notifyCsMessageHandling,
+        sessionEnded: config.notifySessionEnded,
+        sessionStarted: config.notifySessionStarted,
+        clientConnected: config.notifyClientConnected,
+        clientDisconnected: config.notifyClientDisconnected,
+      },
       createdAt: config.createdAt.toISOString(),
       updatedAt: config.updatedAt.toISOString(),
     };
@@ -303,52 +311,6 @@ export class BotConfigService {
     };
   }
 
-  async getNotificationSettings(): Promise<BotNotificationSettings> {
-    const config = await prisma.botConfig.findFirst();
-    
-    if (!config) {
-      throw new Error('Bot configuration not found');
-    }
-
-    return {
-      newClientMessage: config.notifyNewClientMessage,
-      csMessageHandling: config.notifyCsMessageHandling,
-      sessionEnded: config.notifySessionEnded,
-      sessionStarted: config.notifySessionStarted,
-      clientConnected: config.notifyClientConnected,
-      clientDisconnected: config.notifyClientDisconnected,
-    };
-  }
-
-  async updateNotificationSettings(settings: BotNotificationSettings): Promise<BotNotificationSettings> {
-    let config = await prisma.botConfig.findFirst();
-    
-    if (!config) {
-      throw new Error('Bot configuration not found');
-    }
-
-    config = await prisma.botConfig.update({
-      where: { id: config.id },
-      data: {
-        notifyNewClientMessage: settings.newClientMessage,
-        notifyCsMessageHandling: settings.csMessageHandling,
-        notifySessionEnded: settings.sessionEnded,
-        notifySessionStarted: settings.sessionStarted,
-        notifyClientConnected: settings.clientConnected,
-        notifyClientDisconnected: settings.clientDisconnected,
-        updatedAt: new Date(),
-      }
-    });
-
-    return {
-      newClientMessage: config.notifyNewClientMessage,
-      csMessageHandling: config.notifyCsMessageHandling,
-      sessionEnded: config.notifySessionEnded,
-      sessionStarted: config.notifySessionStarted,
-      clientConnected: config.notifyClientConnected,
-      clientDisconnected: config.notifyClientDisconnected,
-    };
-  }
 
   async sendTestNotification(): Promise<{ success: boolean; message: string }> {
     const config = await prisma.botConfig.findFirst();
@@ -549,6 +511,192 @@ export class BotConfigService {
       return data.ok;
     } catch (error) {
       console.error('Notification send error:', error);
+      return false;
+    }
+  }
+
+  // Notification Settings Management
+  async updateNotificationSettings(settings: BotNotificationSettings) {
+    try {
+      let config = await prisma.botConfig.findFirst();
+      
+      if (!config) {
+        throw new Error('Bot configuration not found');
+      }
+
+      const updatedConfig = await prisma.botConfig.update({
+        where: { id: config.id },
+        data: {
+          notifyNewClientMessage: settings.newClientMessage,
+          notifyCsMessageHandling: settings.csMessageHandling,
+          notifySessionEnded: settings.sessionEnded,
+          notifySessionStarted: settings.sessionStarted,
+          notifyClientConnected: settings.clientConnected,
+          notifyClientDisconnected: settings.clientDisconnected,
+          notificationsEnabled: true, // Enable notifications when settings are updated
+        }
+      });
+
+      return {
+        id: updatedConfig.id,
+        botToken: updatedConfig.botToken ? '***' : undefined,
+        isConnected: updatedConfig.isConnected,
+        botUsername: updatedConfig.botUsername,
+        groupId: updatedConfig.groupId,
+        groupTitle: updatedConfig.groupTitle,
+        isGroupConfigured: updatedConfig.isGroupConfigured,
+        notificationsEnabled: updatedConfig.notificationsEnabled,
+        notificationSettings: {
+          newClientMessage: updatedConfig.notifyNewClientMessage,
+          csMessageHandling: updatedConfig.notifyCsMessageHandling,
+          sessionEnded: updatedConfig.notifySessionEnded,
+          sessionStarted: updatedConfig.notifySessionStarted,
+          clientConnected: updatedConfig.notifyClientConnected,
+          clientDisconnected: updatedConfig.notifyClientDisconnected,
+        },
+        createdAt: updatedConfig.createdAt.toISOString(),
+        updatedAt: updatedConfig.updatedAt.toISOString(),
+      };
+    } catch (error) {
+      console.error('Error updating notification settings:', error);
+      throw error;
+    }
+  }
+
+  async getNotificationSettings(): Promise<BotNotificationSettings> {
+    try {
+      const config = await prisma.botConfig.findFirst();
+      
+      if (!config) {
+        // Return default settings if no config exists
+        return {
+          newClientMessage: true,
+          csMessageHandling: true,
+          sessionEnded: true,
+          sessionStarted: true,
+          clientConnected: true,
+          clientDisconnected: true,
+        };
+      }
+
+      return {
+        newClientMessage: config.notifyNewClientMessage,
+        csMessageHandling: config.notifyCsMessageHandling,
+        sessionEnded: config.notifySessionEnded,
+        sessionStarted: config.notifySessionStarted,
+        clientConnected: config.notifyClientConnected,
+        clientDisconnected: config.notifyClientDisconnected,
+      };
+    } catch (error) {
+      console.error('Error getting notification settings:', error);
+      throw error;
+    }
+  }
+
+  // Notification Trigger Methods
+  async sendNewClientMessageNotification(clientName: string, message: string, sessionId: string) {
+    try {
+      const settings = await this.getNotificationSettings();
+      if (!settings.newClientMessage) return false;
+
+      const notificationMessage = `🔔 *New Client Message*\n\n` +
+        `👤 *Client:* ${clientName}\n` +
+        `💬 *Message:* ${message.length > 100 ? message.substring(0, 100) + '...' : message}\n` +
+        `🆔 *Session:* ${sessionId}\n\n` +
+        `📅 *Time:* ${new Date().toLocaleString()}`;
+
+      return await this.sendNotificationToGroup(notificationMessage);
+    } catch (error) {
+      console.error('Error sending new client message notification:', error);
+      return false;
+    }
+  }
+
+  async sendSessionStartedNotification(clientName: string, csName: string, sessionId: string) {
+    try {
+      const settings = await this.getNotificationSettings();
+      if (!settings.sessionStarted) return false;
+
+      const notificationMessage = `▶️ *Session Started*\n\n` +
+        `👤 *Client:* ${clientName}\n` +
+        `👨‍💼 *CS Agent:* ${csName}\n` +
+        `🆔 *Session:* ${sessionId}\n\n` +
+        `📅 *Time:* ${new Date().toLocaleString()}`;
+
+      return await this.sendNotificationToGroup(notificationMessage);
+    } catch (error) {
+      console.error('Error sending session started notification:', error);
+      return false;
+    }
+  }
+
+  async sendSessionEndedNotification(clientName: string, csName: string, sessionId: string, duration?: string) {
+    try {
+      const settings = await this.getNotificationSettings();
+      if (!settings.sessionEnded) return false;
+
+      const notificationMessage = `⏹️ *Session Ended*\n\n` +
+        `👤 *Client:* ${clientName}\n` +
+        `👨‍💼 *CS Agent:* ${csName}\n` +
+        `🆔 *Session:* ${sessionId}\n` +
+        `${duration ? `⏱️ *Duration:* ${duration}\n` : ''}` +
+        `📅 *Time:* ${new Date().toLocaleString()}`;
+
+      return await this.sendNotificationToGroup(notificationMessage);
+    } catch (error) {
+      console.error('Error sending session ended notification:', error);
+      return false;
+    }
+  }
+
+  async sendClientConnectedNotification(clientName: string, isNewClient: boolean = false) {
+    try {
+      const settings = await this.getNotificationSettings();
+      if (!settings.clientConnected) return false;
+
+      const notificationMessage = `🟢 *Client ${isNewClient ? 'Registered' : 'Connected'}*\n\n` +
+        `👤 *Client:* ${clientName}\n` +
+        `${isNewClient ? '✨ *Status:* New client registered\n' : '🔗 *Status:* Client reconnected\n'}` +
+        `📅 *Time:* ${new Date().toLocaleString()}`;
+
+      return await this.sendNotificationToGroup(notificationMessage);
+    } catch (error) {
+      console.error('Error sending client connected notification:', error);
+      return false;
+    }
+  }
+
+  async sendClientDisconnectedNotification(clientName: string, sessionId?: string) {
+    try {
+      const settings = await this.getNotificationSettings();
+      if (!settings.clientDisconnected) return false;
+
+      const notificationMessage = `🔴 *Client Disconnected*\n\n` +
+        `👤 *Client:* ${clientName}\n` +
+        `${sessionId ? `🆔 *Session:* ${sessionId}\n` : ''}` +
+        `📅 *Time:* ${new Date().toLocaleString()}`;
+
+      return await this.sendNotificationToGroup(notificationMessage);
+    } catch (error) {
+      console.error('Error sending client disconnected notification:', error);
+      return false;
+    }
+  }
+
+  async sendCsMessageHandlingNotification(csName: string, clientName: string, action: string) {
+    try {
+      const settings = await this.getNotificationSettings();
+      if (!settings.csMessageHandling) return false;
+
+      const notificationMessage = `👨‍💼 *CS Activity*\n\n` +
+        `👨‍💼 *Agent:* ${csName}\n` +
+        `👤 *Client:* ${clientName}\n` +
+        `⚡ *Action:* ${action}\n` +
+        `📅 *Time:* ${new Date().toLocaleString()}`;
+
+      return await this.sendNotificationToGroup(notificationMessage);
+    } catch (error) {
+      console.error('Error sending CS message handling notification:', error);
       return false;
     }
   }

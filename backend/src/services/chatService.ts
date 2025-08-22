@@ -1,6 +1,7 @@
 import prisma from '../utils/database';
 import { SessionInfo, ChatMessage } from '../types';
 import { TelegramService } from './telegramService';
+import { BotConfigService } from './botConfigService';
 import path from 'path';
 
 export class ChatService {
@@ -303,7 +304,10 @@ export class ChatService {
   async endSession(sessionId: string, userId: string, userRole?: string): Promise<void> {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      include: { client: true }
+      include: { 
+        client: true,
+        cs: true
+      }
     });
 
     if (!session) {
@@ -315,13 +319,28 @@ export class ChatService {
       throw new Error('Unauthorized or session not found');
     }
 
+    const endTime = new Date();
+    const startTime = session.createdAt;
+    const duration = this.calculateSessionDuration(startTime, endTime);
+
     await prisma.session.update({
       where: { id: sessionId },
       data: {
         status: 'ENDED',
-        endedAt: new Date()
+        endedAt: endTime
       }
     });
+
+    // Send notification for session ended
+    if (session.cs) {
+      const botConfigService = BotConfigService.getInstance();
+      await botConfigService.sendSessionEndedNotification(
+        session.client.name, 
+        session.cs.name, 
+        sessionId, 
+        duration
+      );
+    }
 
     try {
       const telegramChatId = parseInt(session.client.telegramId);
@@ -337,6 +356,21 @@ export class ChatService {
     if (io) {
       io.to(`cs_${userId}`).emit('session_ended', { sessionId });
       io.to(`session_${sessionId}`).emit('session_ended', { sessionId });
+    }
+  }
+
+  private calculateSessionDuration(startTime: Date, endTime: Date): string {
+    const durationMs = endTime.getTime() - startTime.getTime();
+    const hours = Math.floor(durationMs / (1000 * 60 * 60));
+    const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((durationMs % (1000 * 60)) / 1000);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
     }
   }
 }

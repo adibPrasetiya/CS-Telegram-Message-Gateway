@@ -132,6 +132,7 @@ export class TelegramService {
       where: { telegramId }
     });
 
+    let isNewClient = false;
     if (!client) {
       client = await prisma.client.create({
         data: {
@@ -140,6 +141,11 @@ export class TelegramService {
           username
         }
       });
+      isNewClient = true;
+      
+      // Send notification for new client registration
+      const botConfigService = BotConfigService.getInstance();
+      await botConfigService.sendClientConnectedNotification(name, isNewClient);
     }
 
     let session = await prisma.session.findFirst({
@@ -201,6 +207,10 @@ export class TelegramService {
         console.log(`New session ${session.id} assigned to CS ${availableCS.name} (${availableCS.id})`);
       }
 
+      // Send notification for session started
+      const botConfigService = BotConfigService.getInstance();
+      await botConfigService.sendSessionStartedNotification(client.name, availableCS.name, session.id);
+
       // Notify client that they are connected to CS
       await this.sendMessage(
         msg.chat.id,
@@ -261,6 +271,10 @@ export class TelegramService {
       } else {
         console.error('Socket.IO instance not available');
       }
+
+      // Send notification for new client message
+      const botConfigService = BotConfigService.getInstance();
+      await botConfigService.sendNewClientMessageNotification(client.name, messageContent, session.id);
     } else {
       console.log('Session has no assigned CS, storing message for later processing');
     }

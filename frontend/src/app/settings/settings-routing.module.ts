@@ -1,6 +1,6 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
-import { SettingsComponent } from './settings-new.component';
+import { SettingsComponent } from './settings.component';
 import { BotConfigurationComponent } from './components/bot-configuration/bot-configuration.component';
 import { UserManagementComponent } from './components/user-management/user-management.component';
 import { NotificationRulesComponent } from './components/notification-rules/notification-rules.component';

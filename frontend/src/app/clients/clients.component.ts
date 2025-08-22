@@ -144,7 +144,7 @@ import { ListItemData } from '../shared/components/list-item/list-item.component
           <!-- Client Statistics -->
           <div class="client-stats" *ngIf="!loadingClientDetails && clientDetails">
             <div class="stat-card">
-              <div class="stat-value">{{ clientDetails._count?.sessions || selectedClient.totalSessions }}</div>
+              <div class="stat-value">{{ clientDetails._count.sessions || selectedClient.totalSessions }}</div>
               <div class="stat-label">Total Sessions</div>
             </div>
             <div class="stat-card">

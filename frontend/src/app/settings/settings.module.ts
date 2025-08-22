@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 import { SettingsRoutingModule } from './settings-routing.module';
-import { SettingsComponent } from './settings-new.component';
+import { SettingsComponent } from './settings.component';
 import { BotConfigurationComponent } from './components/bot-configuration/bot-configuration.component';
 import { UserManagementComponent } from './components/user-management/user-management.component';
 import { NotificationRulesComponent } from './components/notification-rules/notification-rules.component';
